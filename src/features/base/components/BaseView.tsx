@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, startTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { api } from "~/trpc/react";
 import { TableGrid } from "./TableGrid";
@@ -39,37 +39,41 @@ export function BaseView({ baseId }: Props) {
 
   const [hiddenFieldIds, setHiddenFieldIds] = useState<string[]>([]);
 
-  // ── Stable URL updater ────────────────────────────────────────────────────
-  // startTransition defers the router.replace so it never fires during render
-  const updateParams = useCallback(
-    (patch: Record<string, string | null>) => {
-      startTransition(() => {
-        const params = new URLSearchParams(window.location.search);
-        for (const [key, value] of Object.entries(patch)) {
-          if (value === null || value === "" || value === "[]") {
-            params.delete(key);
-          } else {
-            params.set(key, value);
-          }
-        }
-        const qs = params.toString();
-        router.replace(`${pathname}${qs ? `?${qs}` : ""}`);
-      });
-    },
-    [pathname, router],
-  );
+  // Keep a ref to pathname so updateParams never needs it as a dep
+  const pathnameRef = useRef(pathname);
+  useEffect(() => { pathnameRef.current = pathname; }, [pathname]);
+
+  // updateParams reads URL fresh from window — never stale, no closure issues
+  // Does NOT use startTransition — that was causing the render-phase call
+  const updateParams = useCallback((patch: Record<string, string | null>) => {
+    const params = new URLSearchParams(window.location.search);
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === null || value === "" || value === "[]") {
+        params.delete(key);
+      } else {
+        params.set(key, value);
+      }
+    }
+    const qs = params.toString();
+    // setTimeout pushes the router.replace out of any render cycle entirely
+    setTimeout(() => {
+      router.replace(`${pathnameRef.current}${qs ? `?${qs}` : ""}`);
+    }, 0);
+  }, [router]);
 
   // ── READ ──────────────────────────────────────────────────────────────────
   const { data: base, isLoading, error } = api.base.getById.useQuery({ id: baseId });
 
-  // auto-select first table only if nothing in URL yet
+  // Auto-select first table — only fires when tables first load and no tableId in URL
+  const didAutoSelect = useRef(false);
   useEffect(() => {
-    if (!activeTableId && base?.tables[0]) {
+    if (!didAutoSelect.current && !activeTableId && base?.tables[0]) {
+      didAutoSelect.current = true;
       updateParams({ tableId: base.tables[0].id });
     }
-  }, [base?.tables[0]?.id, activeTableId, updateParams]);
+  }, [base?.tables, activeTableId, updateParams]);
 
-  // reset hidden fields when switching tables
+  // Reset hidden fields when switching tables
   useEffect(() => {
     setHiddenFieldIds([]);
   }, [activeTableId]);

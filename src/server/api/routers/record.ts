@@ -58,30 +58,15 @@ function buildFilterWhere(filters: Filter[]): Prisma.RecordWhereInput[] {
   });
 }
 
-// Build a fully raw SQL query string — NO Prisma.sql template interpolation
-// for the ORDER BY or LIMIT parts, only for WHERE parameterised values.
-// This avoids the $2 syntax error caused by Prisma re-numbering parameters
-// when ORDER BY expressions are mixed with parameterised LIMIT values.
-function buildSortedQuery(
+// All queries — both sorted and unsorted — go through raw SQL so search
+// consistently uses ILIKE on the cast JSON text, not Prisma's string_contains
+function buildRawQuery(
   tableId: string,
   sorts: Sort[],
-  search: string | undefined,
+  search: string,
   cursor: number | undefined,
   limit: number,
 ): Prisma.Sql {
-  // ORDER BY clauses — all raw, no parameters
-  const orderClauses = sorts.map((sort) => {
-    const dir     = sort.direction === "asc" ? "ASC" : "DESC";
-    const fieldId = sort.fieldId; // cuid from our DB, safe for Prisma.raw
-    if (sort.fieldType === "NUMBER") {
-      return `("Record"."data"->>'${fieldId}')::numeric ${dir} NULLS LAST`;
-    }
-    return `"Record"."data"->>'${fieldId}' ${dir} NULLS LAST`;
-  });
-  orderClauses.push(`"Record"."order" ASC`);
-  const orderSQL = orderClauses.join(", ");
-
-  // Build WHERE clauses — parameterised values use Prisma.sql
   const conditions: Prisma.Sql[] = [
     Prisma.sql`"Record"."tableId" = ${tableId}`,
   ];
@@ -91,6 +76,7 @@ function buildSortedQuery(
   }
 
   if (search) {
+    // Cast the whole JSON blob to text and ILIKE search across all values
     conditions.push(Prisma.sql`"Record"."data"::text ILIKE ${"%" + search + "%"}`);
   }
 
@@ -98,15 +84,28 @@ function buildSortedQuery(
     (acc, cond, i) => i === 0 ? cond : Prisma.sql`${acc} AND ${cond}`,
   );
 
-  // LIMIT is raw — must not be a parameter in ORDER BY context
-  const limitVal = limit + 1;
+  // ORDER BY — always raw to avoid $N parameter errors
+  let orderSQL: string;
+  if (sorts.length === 0) {
+    orderSQL = `"Record"."order" ASC`;
+  } else {
+    const clauses = sorts.map((sort) => {
+      const dir     = sort.direction === "asc" ? "ASC" : "DESC";
+      const fieldId = sort.fieldId;
+      return sort.fieldType === "NUMBER"
+        ? `("Record"."data"->>'${fieldId}')::numeric ${dir} NULLS LAST`
+        : `"Record"."data"->>'${fieldId}' ${dir} NULLS LAST`;
+    });
+    clauses.push(`"Record"."order" ASC`);
+    orderSQL = clauses.join(", ");
+  }
 
   return Prisma.sql`
     SELECT "Record"."id", "Record"."order"
     FROM   "Record"
     WHERE  ${whereSQL}
     ORDER BY ${Prisma.raw(orderSQL)}
-    LIMIT  ${Prisma.raw(String(limitVal))}
+    LIMIT  ${Prisma.raw(String(limit + 1))}
   `;
 }
 
@@ -132,38 +131,9 @@ export const recordRouter = createTRPCRouter({
       if (!table) throw new TRPCError({ code: "NOT_FOUND", message: "Table not found" });
 
       const filterWhere = buildFilterWhere(input.filters);
-      const searchWhere: Prisma.RecordWhereInput[] = input.search
-        ? [{ data: { string_contains: input.search } }]
-        : [];
 
-      // ── Path A: no sorts → pure Prisma ───────────────────────────────────
-      if (input.sorts.length === 0) {
-        const where: Prisma.RecordWhereInput = {
-          tableId: input.tableId,
-          ...(input.cursor !== undefined ? { order: { gt: input.cursor } } : {}),
-          AND: [...filterWhere, ...searchWhere],
-        };
-
-        const [records, total] = await Promise.all([
-          ctx.db.record.findMany({
-            where,
-            orderBy: [{ order: "asc" }],
-            take:    input.limit + 1,
-          }),
-          ctx.db.record.count({
-            where: { tableId: input.tableId, AND: [...filterWhere, ...searchWhere] },
-          }),
-        ]);
-
-        const hasMore    = records.length > input.limit;
-        const page       = hasMore ? records.slice(0, input.limit) : records;
-        const nextCursor = hasMore ? (page[page.length - 1]?.order ?? null) : null;
-
-        return { records: page.map(parseRecord), nextCursor, total };
-      }
-
-      // ── Path B: sorts → fully raw SQL ─────────────────────────────────────
-      const query = buildSortedQuery(
+      // ── Single path: always use raw SQL for consistent search behaviour ────
+      const query = buildRawQuery(
         input.tableId,
         input.sorts,
         input.search,
@@ -174,15 +144,29 @@ export const recordRouter = createTRPCRouter({
       const rawRows = await ctx.db.$queryRaw<RawRecordRow[]>(query);
       const sortedIds = rawRows.map((r) => r.id);
 
+      // Fetch full records + total count in parallel
       const [records, total] = await Promise.all([
         ctx.db.record.findMany({
-          where: { id: { in: sortedIds }, tableId: input.tableId, AND: filterWhere },
+          where: {
+            id:      { in: sortedIds },
+            tableId: input.tableId,
+            AND:     filterWhere,
+          },
         }),
-        ctx.db.record.count({
-          where: { tableId: input.tableId, AND: [...filterWhere, ...searchWhere] },
-        }),
+        // Count uses raw SQL too so search count is also correct
+        ctx.db.$queryRaw<[{ count: bigint }]>(
+          Prisma.sql`
+            SELECT COUNT(*)::bigint as count
+            FROM "Record"
+            WHERE "Record"."tableId" = ${input.tableId}
+            ${input.search ? Prisma.sql`AND "Record"."data"::text ILIKE ${"%" + input.search + "%"}` : Prisma.empty}
+          `
+        ),
       ]);
 
+      const totalCount = Number(total[0]?.count ?? 0);
+
+      // Re-sort fetched records to match raw SQL order
       const idOrder = new Map(sortedIds.map((id, i) => [id, i]));
       const sorted  = records.sort((a, b) => (idOrder.get(a.id) ?? 0) - (idOrder.get(b.id) ?? 0));
 
@@ -190,7 +174,7 @@ export const recordRouter = createTRPCRouter({
       const page       = hasMore ? sorted.slice(0, input.limit) : sorted;
       const nextCursor = hasMore ? (rawRows[input.limit - 1]?.order ?? null) : null;
 
-      return { records: page.map(parseRecord), nextCursor, total };
+      return { records: page.map(parseRecord), nextCursor, total: totalCount };
     }),
 
   create: protectedProcedure

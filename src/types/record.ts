@@ -68,7 +68,7 @@ export const RecordListInputSchema = z.object({
   limit:   z.number().min(1).max(200).default(100),
   filters: z.array(FilterSchema).default([]),
   sorts:   z.array(SortSchema).default([]),
-  search:  z.string().optional(),
+  search:  z.string().default(""),
 });
 export type RecordListInput = z.infer<typeof RecordListInputSchema>;
 
