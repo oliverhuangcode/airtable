@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, startTransition } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { api } from "~/trpc/react";
 import { TableGrid } from "./TableGrid";
@@ -24,39 +24,42 @@ export function BaseView({ baseId }: Props) {
   const pathname     = usePathname();
   const searchParams = useSearchParams();
 
-  // ── Read URL state once per render — stable references via useMemo ────────
   const activeTableId = searchParams.get("tableId");
   const search        = searchParams.get("search") ?? "";
   const filters       = useMemo<Filter[]>(
     () => parseJSON(searchParams.get("filters"), []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [searchParams.get("filters")],
   );
-  const sorts         = useMemo<Sort[]>(
+  const sorts = useMemo<Sort[]>(
     () => parseJSON(searchParams.get("sorts"), []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [searchParams.get("sorts")],
   );
 
   const [hiddenFieldIds, setHiddenFieldIds] = useState<string[]>([]);
 
-  // ── Stable URL updater — uses useCallback so effects don't re-fire ────────
+  // ── Stable URL updater ────────────────────────────────────────────────────
+  // startTransition defers the router.replace so it never fires during render
   const updateParams = useCallback(
     (patch: Record<string, string | null>) => {
-      // read current params fresh inside the callback to avoid stale closure
-      const params = new URLSearchParams(window.location.search);
-      for (const [key, value] of Object.entries(patch)) {
-        if (value === null || value === "" || value === "[]") {
-          params.delete(key);
-        } else {
-          params.set(key, value);
+      startTransition(() => {
+        const params = new URLSearchParams(window.location.search);
+        for (const [key, value] of Object.entries(patch)) {
+          if (value === null || value === "" || value === "[]") {
+            params.delete(key);
+          } else {
+            params.set(key, value);
+          }
         }
-      }
-      const qs = params.toString();
-      router.replace(`${pathname}${qs ? `?${qs}` : ""}`);
+        const qs = params.toString();
+        router.replace(`${pathname}${qs ? `?${qs}` : ""}`);
+      });
     },
     [pathname, router],
   );
 
-  // ── READ: base with tables + fields ──────────────────────────────────────
+  // ── READ ──────────────────────────────────────────────────────────────────
   const { data: base, isLoading, error } = api.base.getById.useQuery({ id: baseId });
 
   // auto-select first table only if nothing in URL yet
@@ -72,7 +75,7 @@ export function BaseView({ baseId }: Props) {
   }, [activeTableId]);
 
   // ── Derived ───────────────────────────────────────────────────────────────
-  const activeTable    = base?.tables.find((t) => t.id === activeTableId);
+  const activeTable = base?.tables.find((t) => t.id === activeTableId);
   const visibleFields: FieldSummary[] = useMemo(
     () => (activeTable?.fields ?? []).filter((f) => !hiddenFieldIds.includes(f.id)),
     [activeTable?.fields, hiddenFieldIds],
@@ -100,12 +103,10 @@ export function BaseView({ baseId }: Props) {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-white">
-      {/* Top nav */}
       <div className="flex h-[56px] flex-shrink-0 items-center border-b border-[#e0e0e0] px-4">
         <span className="text-sm font-semibold text-[#1f1f1f]">{base.name}</span>
       </div>
 
-      {/* Table tabs */}
       <TableTabs
         baseId={baseId}
         tables={base.tables}
@@ -115,7 +116,6 @@ export function BaseView({ baseId }: Props) {
         }}
       />
 
-      {/* Toolbar */}
       {activeTableId && activeTable && (
         <Toolbar
           tableId={activeTableId}
@@ -131,7 +131,6 @@ export function BaseView({ baseId }: Props) {
         />
       )}
 
-      {/* Grid */}
       {activeTableId && activeTable && (
         <div className="flex-1 overflow-hidden">
           <TableGrid

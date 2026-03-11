@@ -17,11 +17,7 @@ import {
   type Sort,
 } from "~/types";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 type RawRecordRow = { id: string; order: number };
-
-// ─── Helper: parse raw DB record to typed Row ─────────────────────────────────
 
 function parseRecord(r: {
   id: string;
@@ -41,34 +37,16 @@ function parseRecord(r: {
   };
 }
 
-// ─── Helper: build Prisma WHERE from filters ──────────────────────────────────
-
 function buildFilterWhere(filters: Filter[]): Prisma.RecordWhereInput[] {
   return filters.map((f) => {
     const key = f.fieldId;
-
     if (f.type === "text") {
       switch (f.op) {
-        case "contains":
-          return { data: { path: [key], string_contains: f.value ?? "" } };
-        case "not_contains":
-          return { NOT: { data: { path: [key], string_contains: f.value ?? "" } } };
-        case "equals":
-          return { data: { path: [key], equals: f.value ?? "" } };
-        case "is_empty":
-          return {
-            OR: [
-              { data: { path: [key], equals: Prisma.JsonNull } },
-              { data: { path: [key], equals: "" } },
-            ],
-          };
-        case "is_not_empty":
-          return {
-            AND: [
-              { NOT: { data: { path: [key], equals: Prisma.JsonNull } } },
-              { NOT: { data: { path: [key], equals: "" } } },
-            ],
-          };
+        case "contains":     return { data: { path: [key], string_contains: f.value ?? "" } };
+        case "not_contains": return { NOT: { data: { path: [key], string_contains: f.value ?? "" } } };
+        case "equals":       return { data: { path: [key], equals: f.value ?? "" } };
+        case "is_empty":     return { OR:  [{ data: { path: [key], equals: Prisma.JsonNull } }, { data: { path: [key], equals: "" } }] };
+        case "is_not_empty": return { AND: [{ NOT: { data: { path: [key], equals: Prisma.JsonNull } } }, { NOT: { data: { path: [key], equals: "" } } }] };
       }
     } else {
       switch (f.op) {
@@ -80,52 +58,60 @@ function buildFilterWhere(filters: Filter[]): Prisma.RecordWhereInput[] {
   });
 }
 
-// ─── Helper: build ORDER BY SQL for JSONB sorting ─────────────────────────────
-//
-// fieldId must use Prisma.raw() — PostgreSQL does not allow $N parameters
-// in ORDER BY expressions, only in WHERE value comparisons.
-//
-// fieldId comes from our own DB (not user input) so Prisma.raw is safe here.
+// Build a fully raw SQL query string — NO Prisma.sql template interpolation
+// for the ORDER BY or LIMIT parts, only for WHERE parameterised values.
+// This avoids the $2 syntax error caused by Prisma re-numbering parameters
+// when ORDER BY expressions are mixed with parameterised LIMIT values.
+function buildSortedQuery(
+  tableId: string,
+  sorts: Sort[],
+  search: string | undefined,
+  cursor: number | undefined,
+  limit: number,
+): Prisma.Sql {
+  // ORDER BY clauses — all raw, no parameters
+  const orderClauses = sorts.map((sort) => {
+    const dir     = sort.direction === "asc" ? "ASC" : "DESC";
+    const fieldId = sort.fieldId; // cuid from our DB, safe for Prisma.raw
+    if (sort.fieldType === "NUMBER") {
+      return `("Record"."data"->>'${fieldId}')::numeric ${dir} NULLS LAST`;
+    }
+    return `"Record"."data"->>'${fieldId}' ${dir} NULLS LAST`;
+  });
+  orderClauses.push(`"Record"."order" ASC`);
+  const orderSQL = orderClauses.join(", ");
 
-function buildSortSQL(sorts: Sort[]): Prisma.Sql {
-  if (sorts.length === 0) {
-    return Prisma.sql`ORDER BY "Record"."order" ASC`;
+  // Build WHERE clauses — parameterised values use Prisma.sql
+  const conditions: Prisma.Sql[] = [
+    Prisma.sql`"Record"."tableId" = ${tableId}`,
+  ];
+
+  if (cursor !== undefined) {
+    conditions.push(Prisma.sql`"Record"."order" > ${cursor}`);
   }
 
-  const clauses = sorts.map((sort) => {
-    const dir     = sort.direction === "asc" ? "ASC" : "DESC";
-    const fieldId = sort.fieldId; // comes from our DB, safe to use in Prisma.raw
+  if (search) {
+    conditions.push(Prisma.sql`"Record"."data"::text ILIKE ${"%" + search + "%"}`);
+  }
 
-    if (sort.fieldType === "NUMBER") {
-      // Prisma.raw for both the field id expression and direction —
-      // neither can be a parameterised value in ORDER BY
-      return Prisma.raw(
-        `("Record"."data"->>'${fieldId}')::numeric ${dir} NULLS LAST`,
-      );
-    } else {
-      return Prisma.raw(
-        `"Record"."data"->>'${fieldId}' ${dir} NULLS LAST`,
-      );
-    }
-  });
-
-  // join clauses with commas
-  const joined = clauses.reduce<Prisma.Sql>(
-    (acc, clause, i) =>
-      i === 0
-        ? Prisma.sql`${clause}`
-        : Prisma.sql`${acc}, ${clause}`,
-    Prisma.empty,
+  const whereSQL = conditions.reduce(
+    (acc, cond, i) => i === 0 ? cond : Prisma.sql`${acc} AND ${cond}`,
   );
 
-  return Prisma.sql`ORDER BY ${joined}, "Record"."order" ASC`;
-}
+  // LIMIT is raw — must not be a parameter in ORDER BY context
+  const limitVal = limit + 1;
 
-// ─── Helper: generate a fake row data object for bulk insert ──────────────────
+  return Prisma.sql`
+    SELECT "Record"."id", "Record"."order"
+    FROM   "Record"
+    WHERE  ${whereSQL}
+    ORDER BY ${Prisma.raw(orderSQL)}
+    LIMIT  ${Prisma.raw(String(limitVal))}
+  `;
+}
 
 function fakeCellValue(fieldName: string, fieldType: "TEXT" | "NUMBER"): string | number {
   if (fieldType === "NUMBER") return faker.number.float({ min: 1, max: 10000, fractionDigits: 2 });
-
   const name = fieldName.toLowerCase();
   if (name.includes("name"))    return faker.person.fullName();
   if (name.includes("email"))   return faker.internet.email();
@@ -136,11 +122,7 @@ function fakeCellValue(fieldName: string, fieldType: "TEXT" | "NUMBER"): string 
   return faker.lorem.words(2);
 }
 
-// ─── Router ───────────────────────────────────────────────────────────────────
-
 export const recordRouter = createTRPCRouter({
-
-  // ─── READ ───────────────────────────────────────────────────────────────────
 
   list: publicProcedure
     .input(RecordListInputSchema)
@@ -150,12 +132,11 @@ export const recordRouter = createTRPCRouter({
       if (!table) throw new TRPCError({ code: "NOT_FOUND", message: "Table not found" });
 
       const filterWhere = buildFilterWhere(input.filters);
-
       const searchWhere: Prisma.RecordWhereInput[] = input.search
         ? [{ data: { string_contains: input.search } }]
         : [];
 
-      // ── Path A: no sorts → pure Prisma ─────────────────────────────────────
+      // ── Path A: no sorts → pure Prisma ───────────────────────────────────
       if (input.sorts.length === 0) {
         const where: Prisma.RecordWhereInput = {
           tableId: input.tableId,
@@ -178,50 +159,30 @@ export const recordRouter = createTRPCRouter({
         const page       = hasMore ? records.slice(0, input.limit) : records;
         const nextCursor = hasMore ? (page[page.length - 1]?.order ?? null) : null;
 
-        return {
-          records:    page.map(parseRecord),
-          nextCursor,
-          total,
-        };
+        return { records: page.map(parseRecord), nextCursor, total };
       }
 
-      // ── Path B: sorts → raw SQL with Prisma.raw ORDER BY ───────────────────
-      const orderBySQL = buildSortSQL(input.sorts);
+      // ── Path B: sorts → fully raw SQL ─────────────────────────────────────
+      const query = buildSortedQuery(
+        input.tableId,
+        input.sorts,
+        input.search,
+        input.cursor,
+        input.limit,
+      );
 
-      const cursorClause = input.cursor !== undefined
-        ? Prisma.sql`AND "Record"."order" > ${input.cursor}`
-        : Prisma.empty;
-
-      const searchClause = input.search
-        ? Prisma.sql`AND "Record"."data"::text ILIKE ${`%${input.search}%`}`
-        : Prisma.empty;
-
-      const rawRows = await ctx.db.$queryRaw<RawRecordRow[]>`
-        SELECT "Record"."id", "Record"."order"
-        FROM   "Record"
-        WHERE  "Record"."tableId" = ${input.tableId}
-        ${cursorClause}
-        ${searchClause}
-        ${orderBySQL}
-        LIMIT  ${input.limit + 1}
-      `;
-
+      const rawRows = await ctx.db.$queryRaw<RawRecordRow[]>(query);
       const sortedIds = rawRows.map((r) => r.id);
 
       const [records, total] = await Promise.all([
         ctx.db.record.findMany({
-          where: {
-            id:      { in: sortedIds },
-            tableId: input.tableId,
-            AND:     filterWhere,
-          },
+          where: { id: { in: sortedIds }, tableId: input.tableId, AND: filterWhere },
         }),
         ctx.db.record.count({
           where: { tableId: input.tableId, AND: [...filterWhere, ...searchWhere] },
         }),
       ]);
 
-      // re-sort to match raw SQL order
       const idOrder = new Map(sortedIds.map((id, i) => [id, i]));
       const sorted  = records.sort((a, b) => (idOrder.get(a.id) ?? 0) - (idOrder.get(b.id) ?? 0));
 
@@ -229,14 +190,8 @@ export const recordRouter = createTRPCRouter({
       const page       = hasMore ? sorted.slice(0, input.limit) : sorted;
       const nextCursor = hasMore ? (rawRows[input.limit - 1]?.order ?? null) : null;
 
-      return {
-        records:    page.map(parseRecord),
-        nextCursor,
-        total,
-      };
+      return { records: page.map(parseRecord), nextCursor, total };
     }),
-
-  // ─── CREATE ─────────────────────────────────────────────────────────────────
 
   create: protectedProcedure
     .input(RecordCreateInputSchema)
@@ -252,17 +207,11 @@ export const recordRouter = createTRPCRouter({
       });
 
       const record = await ctx.db.record.create({
-        data: {
-          tableId: input.tableId,
-          order:   (last?.order ?? -1) + 1,
-          data:    input.data,
-        },
+        data: { tableId: input.tableId, order: (last?.order ?? -1) + 1, data: input.data },
       });
 
       return parseRecord(record);
     }),
-
-  // ─── UPDATE CELL ────────────────────────────────────────────────────────────
 
   updateCell: protectedProcedure
     .input(CellUpdateInputSchema)
@@ -282,8 +231,6 @@ export const recordRouter = createTRPCRouter({
       return parseRecord(updated);
     }),
 
-  // ─── DELETE ─────────────────────────────────────────────────────────────────
-
   delete: protectedProcedure
     .input(RecordDeleteInputSchema)
     .output(z.object({ id: z.string() }))
@@ -295,19 +242,13 @@ export const recordRouter = createTRPCRouter({
       return { id: input.id };
     }),
 
-  // ─── BULK DELETE ────────────────────────────────────────────────────────────
-
   bulkDelete: protectedProcedure
     .input(RecordBulkDeleteInputSchema)
     .output(z.object({ deleted: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const result = await ctx.db.record.deleteMany({
-        where: { id: { in: input.ids } },
-      });
+      const result = await ctx.db.record.deleteMany({ where: { id: { in: input.ids } } });
       return { deleted: result.count };
     }),
-
-  // ─── BULK CREATE ─────────────────────────────────────────────────────────────
 
   bulkCreate: protectedProcedure
     .input(RecordBulkCreateInputSchema)
@@ -331,20 +272,15 @@ export const recordRouter = createTRPCRouter({
 
       for (let i = 0; i < input.count; i += CHUNK) {
         const batchSize = Math.min(CHUNK, input.count - i);
-
         await ctx.db.record.createMany({
           data: Array.from({ length: batchSize }, (_, j) => ({
             tableId: input.tableId,
             order:   startOrder + i + j,
             data:    Object.fromEntries(
-              table.fields.map((f) => [
-                f.id,
-                fakeCellValue(f.name, f.type as "TEXT" | "NUMBER"),
-              ]),
+              table.fields.map((f) => [f.id, fakeCellValue(f.name, f.type as "TEXT" | "NUMBER")]),
             ),
           })),
         });
-
         created += batchSize;
       }
 
