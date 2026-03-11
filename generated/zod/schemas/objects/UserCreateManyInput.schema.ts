@@ -4,8 +4,10 @@ import type { Prisma } from '../../../prisma';
 
 const makeSchema = () => z.object({
   id: z.string().optional(),
-  name: z.string(),
-  email: z.string(),
+  name: z.string().optional().nullable(),
+  email: z.string().optional().nullable(),
+  emailVerified: z.coerce.date().optional().nullable(),
+  image: z.string().optional().nullable(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional()
 }).strict();

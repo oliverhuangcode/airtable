@@ -7,6 +7,11 @@ if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is not set in .env");
 }
 
+// ─── Replace this with your real Google email ─────────────────────────────────
+// This must match the email on your Google account so the seed data
+// is owned by your real user after you sign in via Google OAuth.
+const DEV_EMAIL = process.env.SEED_USER_EMAIL ?? "oliverwhuang@gmail.com";
+
 const pool    = new Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
 const prisma  = new PrismaClient({ adapter });
@@ -18,17 +23,28 @@ async function main() {
   await prisma.view.deleteMany();
   await prisma.table.deleteMany();
   await prisma.base.deleteMany();
-  await prisma.user.deleteMany();
 
-  console.log("🗑️  Cleared existing data");
+  // don't wipe users — NextAuth may have already created your real account
+  // instead upsert so we don't break existing sessions
 
-  // ─── Users ───────────────────────────────────────────────────────────────
-  const [alice, bob] = await Promise.all([
-    prisma.user.create({ data: { name: "Alice Johnson", email: "alice@example.com" } }),
-    prisma.user.create({ data: { name: "Bob Smith",     email: "bob@example.com"   } }),
-  ]);
+  console.log("🗑️  Cleared bases, tables, fields, records");
 
-  console.log("👤 Created 2 users");
+  // ─── Upsert dev user ─────────────────────────────────────────────────────
+  // If you've already signed in via Google, this will find your existing user.
+  // If not, it creates a placeholder that will merge when you first sign in.
+  const alice = await prisma.user.upsert({
+    where:  { email: DEV_EMAIL },
+    update: {},
+    create: { name: "Dev User", email: DEV_EMAIL },
+  });
+
+  const bob = await prisma.user.upsert({
+    where:  { email: "bob@example.com" },
+    update: {},
+    create: { name: "Bob Smith", email: "bob@example.com" },
+  });
+
+  console.log(`👤 Upserted users (primary: ${alice.email})`);
 
   // ─── Bases ───────────────────────────────────────────────────────────────
   const [crmBase, projectBase, hiringBase] = await Promise.all([
@@ -78,7 +94,7 @@ async function main() {
 
   console.log("🔲 Created fields");
 
-  // ─── Records (JSON blob per row) ─────────────────────────────────────────
+  // ─── Records ─────────────────────────────────────────────────────────────
   await prisma.record.createMany({
     data: [
       { tableId: contactsTable.id, order: 0, data: { [cName.id]: "Jordan Lee",   [cEmail.id]: "jordan@acme.com",    [cCompany.id]: "Acme Corp", [cScore.id]: 92 } },
@@ -107,7 +123,7 @@ async function main() {
 
   console.log(`
 ✅ Seed complete:
-   👤 2 users
+   👤 2 users (upserted)
    📦 3 bases
    📋 4 tables
    🔲 14 fields

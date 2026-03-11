@@ -3,12 +3,18 @@ export const UserGroupByResultSchema = z.array(z.object({
   id: z.string(),
   name: z.string(),
   email: z.string(),
+  emailVerified: z.date(),
+  image: z.string(),
   createdAt: z.date(),
   updatedAt: z.date(),
   _count: z.object({
     id: z.number(),
     name: z.number(),
     email: z.number(),
+    emailVerified: z.number(),
+    image: z.number(),
+    accounts: z.number(),
+    sessions: z.number(),
     bases: z.number(),
     createdAt: z.number(),
     updatedAt: z.number()
@@ -17,6 +23,8 @@ export const UserGroupByResultSchema = z.array(z.object({
     id: z.string().nullable(),
     name: z.string().nullable(),
     email: z.string().nullable(),
+    emailVerified: z.date().nullable(),
+    image: z.string().nullable(),
     createdAt: z.date().nullable(),
     updatedAt: z.date().nullable()
   }).nullable().optional(),
@@ -24,6 +32,8 @@ export const UserGroupByResultSchema = z.array(z.object({
     id: z.string().nullable(),
     name: z.string().nullable(),
     email: z.string().nullable(),
+    emailVerified: z.date().nullable(),
+    image: z.string().nullable(),
     createdAt: z.date().nullable(),
     updatedAt: z.date().nullable()
   }).nullable().optional()

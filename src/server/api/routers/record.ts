@@ -42,7 +42,6 @@ function parseRecord(r: {
 }
 
 // ─── Helper: build Prisma WHERE from filters ──────────────────────────────────
-// JSONB operators: data->>fieldId extracts the value as text
 
 function buildFilterWhere(filters: Filter[]): Prisma.RecordWhereInput[] {
   return filters.map((f) => {
@@ -72,7 +71,6 @@ function buildFilterWhere(filters: Filter[]): Prisma.RecordWhereInput[] {
           };
       }
     } else {
-      // number filters — Prisma JSONB path comparison
       switch (f.op) {
         case "gt":     return { data: { path: [key], gt:     f.value } };
         case "lt":     return { data: { path: [key], lt:     f.value } };
@@ -84,10 +82,10 @@ function buildFilterWhere(filters: Filter[]): Prisma.RecordWhereInput[] {
 
 // ─── Helper: build ORDER BY SQL for JSONB sorting ─────────────────────────────
 //
-// TEXT sort:   ORDER BY data->>'fieldId' ASC NULLS LAST
-// NUMBER sort: ORDER BY (data->>'fieldId')::numeric ASC NULLS LAST
+// fieldId must use Prisma.raw() — PostgreSQL does not allow $N parameters
+// in ORDER BY expressions, only in WHERE value comparisons.
 //
-// Much simpler than the Cell table approach — no correlated subquery needed.
+// fieldId comes from our own DB (not user input) so Prisma.raw is safe here.
 
 function buildSortSQL(sorts: Sort[]): Prisma.Sql {
   if (sorts.length === 0) {
@@ -95,21 +93,31 @@ function buildSortSQL(sorts: Sort[]): Prisma.Sql {
   }
 
   const clauses = sorts.map((sort) => {
-    const dir = sort.direction === "asc" ? Prisma.sql`ASC` : Prisma.sql`DESC`;
+    const dir     = sort.direction === "asc" ? "ASC" : "DESC";
+    const fieldId = sort.fieldId; // comes from our DB, safe to use in Prisma.raw
 
     if (sort.fieldType === "NUMBER") {
-      // cast to numeric for correct numeric ordering (9 < 10, not "9" > "10")
-      return Prisma.sql`("Record"."data"->>${sort.fieldId})::numeric ${dir} NULLS LAST`;
+      // Prisma.raw for both the field id expression and direction —
+      // neither can be a parameterised value in ORDER BY
+      return Prisma.raw(
+        `("Record"."data"->>'${fieldId}')::numeric ${dir} NULLS LAST`,
+      );
     } else {
-      return Prisma.sql`"Record"."data"->>${sort.fieldId} ${dir} NULLS LAST`;
+      return Prisma.raw(
+        `"Record"."data"->>'${fieldId}' ${dir} NULLS LAST`,
+      );
     }
   });
 
-  const joined = clauses.reduce(
-    (acc, clause, i) => i === 0 ? clause : Prisma.sql`${acc}, ${clause}`,
+  // join clauses with commas
+  const joined = clauses.reduce<Prisma.Sql>(
+    (acc, clause, i) =>
+      i === 0
+        ? Prisma.sql`${clause}`
+        : Prisma.sql`${acc}, ${clause}`,
+    Prisma.empty,
   );
 
-  // always fall back to record order for stable pagination on ties
   return Prisma.sql`ORDER BY ${joined}, "Record"."order" ASC`;
 }
 
@@ -143,7 +151,6 @@ export const recordRouter = createTRPCRouter({
 
       const filterWhere = buildFilterWhere(input.filters);
 
-      // global search — match any field value in the JSON blob
       const searchWhere: Prisma.RecordWhereInput[] = input.search
         ? [{ data: { string_contains: input.search } }]
         : [];
@@ -178,7 +185,7 @@ export const recordRouter = createTRPCRouter({
         };
       }
 
-      // ── Path B: sorts → raw SQL ORDER BY JSONB ──────────────────────────────
+      // ── Path B: sorts → raw SQL with Prisma.raw ORDER BY ───────────────────
       const orderBySQL = buildSortSQL(input.sorts);
 
       const cursorClause = input.cursor !== undefined
@@ -256,7 +263,6 @@ export const recordRouter = createTRPCRouter({
     }),
 
   // ─── UPDATE CELL ────────────────────────────────────────────────────────────
-  // Patch a single field value inside the JSON blob
 
   updateCell: protectedProcedure
     .input(CellUpdateInputSchema)
@@ -265,7 +271,6 @@ export const recordRouter = createTRPCRouter({
       const record = await ctx.db.record.findUnique({ where: { id: input.recordId } });
       if (!record) throw new TRPCError({ code: "NOT_FOUND", message: "Record not found" });
 
-      // merge the new value into the existing JSON blob
       const currentData = RowDataSchema.catch({}).parse(record.data);
       const updatedData = { ...currentData, [input.fieldId]: input.value };
 
@@ -302,8 +307,7 @@ export const recordRouter = createTRPCRouter({
       return { deleted: result.count };
     }),
 
-  // ─── BULK CREATE (100k row button) ───────────────────────────────────────────
-  // Much faster than the Cell table approach — one row per record, no join table
+  // ─── BULK CREATE ─────────────────────────────────────────────────────────────
 
   bulkCreate: protectedProcedure
     .input(RecordBulkCreateInputSchema)
@@ -328,7 +332,6 @@ export const recordRouter = createTRPCRouter({
       for (let i = 0; i < input.count; i += CHUNK) {
         const batchSize = Math.min(CHUNK, input.count - i);
 
-        // build fake data blob for each record in the chunk
         await ctx.db.record.createMany({
           data: Array.from({ length: batchSize }, (_, j) => ({
             tableId: input.tableId,

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { BaseModelSchema } from "generated/zod/schemas/variants/pure/Base.pure";
 import { UserSummarySchema } from "./user";
-import { TableSummarySchema } from "./table";
+import { TableForDetailsSchema } from "./table";
 
 // ─── Base type ────────────────────────────────────────────────────────────────
 export type Base = z.infer<typeof BaseModelSchema>;
@@ -21,7 +21,7 @@ export const BaseForDetailsSchema = z.object({
   id:        z.string(),
   name:      z.string(),
   createdAt: z.date(),
-  tables:    z.array(TableSummarySchema),
+  tables:    z.array(TableForDetailsSchema),
   createdBy: UserSummarySchema,
 });
 export type BaseForDetails = z.infer<typeof BaseForDetailsSchema>;
