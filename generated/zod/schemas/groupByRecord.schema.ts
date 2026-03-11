@@ -1,0 +1,15 @@
+import type { Prisma } from '../../prisma';
+import * as z from 'zod';
+import { RecordWhereInputObjectSchema as RecordWhereInputObjectSchema } from './objects/RecordWhereInput.schema';
+import { RecordOrderByWithAggregationInputObjectSchema as RecordOrderByWithAggregationInputObjectSchema } from './objects/RecordOrderByWithAggregationInput.schema';
+import { RecordScalarWhereWithAggregatesInputObjectSchema as RecordScalarWhereWithAggregatesInputObjectSchema } from './objects/RecordScalarWhereWithAggregatesInput.schema';
+import { RecordScalarFieldEnumSchema } from './enums/RecordScalarFieldEnum.schema';
+import { RecordCountAggregateInputObjectSchema as RecordCountAggregateInputObjectSchema } from './objects/RecordCountAggregateInput.schema';
+import { RecordMinAggregateInputObjectSchema as RecordMinAggregateInputObjectSchema } from './objects/RecordMinAggregateInput.schema';
+import { RecordMaxAggregateInputObjectSchema as RecordMaxAggregateInputObjectSchema } from './objects/RecordMaxAggregateInput.schema';
+import { RecordAvgAggregateInputObjectSchema as RecordAvgAggregateInputObjectSchema } from './objects/RecordAvgAggregateInput.schema';
+import { RecordSumAggregateInputObjectSchema as RecordSumAggregateInputObjectSchema } from './objects/RecordSumAggregateInput.schema';
+
+export const RecordGroupBySchema: z.ZodType<Prisma.RecordGroupByArgs> = z.object({ where: RecordWhereInputObjectSchema.optional(), orderBy: z.union([RecordOrderByWithAggregationInputObjectSchema, RecordOrderByWithAggregationInputObjectSchema.array()]).optional(), having: RecordScalarWhereWithAggregatesInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), by: z.array(RecordScalarFieldEnumSchema), _count: z.union([ z.literal(true), RecordCountAggregateInputObjectSchema ]).optional(), _min: RecordMinAggregateInputObjectSchema.optional(), _max: RecordMaxAggregateInputObjectSchema.optional(), _avg: RecordAvgAggregateInputObjectSchema.optional(), _sum: RecordSumAggregateInputObjectSchema.optional() }).strict() as unknown as z.ZodType<Prisma.RecordGroupByArgs>;
+
+export const RecordGroupByZodSchema = z.object({ where: RecordWhereInputObjectSchema.optional(), orderBy: z.union([RecordOrderByWithAggregationInputObjectSchema, RecordOrderByWithAggregationInputObjectSchema.array()]).optional(), having: RecordScalarWhereWithAggregatesInputObjectSchema.optional(), take: z.number().optional(), skip: z.number().optional(), by: z.array(RecordScalarFieldEnumSchema), _count: z.union([ z.literal(true), RecordCountAggregateInputObjectSchema ]).optional(), _min: RecordMinAggregateInputObjectSchema.optional(), _max: RecordMaxAggregateInputObjectSchema.optional(), _avg: RecordAvgAggregateInputObjectSchema.optional(), _sum: RecordSumAggregateInputObjectSchema.optional() }).strict();
