@@ -1,0 +1,107 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider = "prisma-client-js"
+    output   = "../generated/prisma"
+}
+
+generator zod {
+    provider = "prisma-zod-generator"
+    output   = "../generated/zod"
+}
+
+datasource db {
+    provider = "postgresql"
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+//
+//  User → Base → Table → Field   (column definitions)
+//                      → Record  (row data stored as JSON blob)
+//                      → View    (saved filter/sort/hidden config)
+//
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  bases     Base[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Base {
+  id          String   @id @default(cuid())
+  name        String
+  createdById String
+  createdBy   User     @relation(fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tables      Table[]
+}
+
+model Table {
+  id        String   @id @default(cuid())
+  name      String
+  baseId    String
+  base      Base     @relation(fields: [baseId], references: [id], onDelete: Cascade)
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  fields    Field[]
+  records   Record[]
+  views     View[]
+
+  @@index([baseId, order])
+}
+
+enum FieldType {
+  TEXT
+  NUMBER
+}
+
+model Field {
+  id        String    @id @default(cuid())
+  name      String
+  type      FieldType @default(TEXT)
+  tableId   String
+  table     Table     @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  order     Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([tableId, name])
+  @@index([tableId, order])
+}
+
+model Record {
+  id        String   @id @default(cuid())
+  tableId   String
+  table     Table    @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  order     Int      @default(0)
+
+  // All cell values stored as a JSON blob keyed by fieldId
+  // e.g. { "fieldId_abc": "Alice", "fieldId_xyz": 42 }
+  data      Json     @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tableId, order])  // critical for 1M row pagination
+}
+
+model View {
+  id           String   @id @default(cuid())
+  name         String
+  tableId      String
+  table        Table    @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  filters      Json     @default("[]")
+  sorts        Json     @default("[]")
+  hiddenFields Json     @default("[]")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([tableId])
+}
