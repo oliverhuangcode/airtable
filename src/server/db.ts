@@ -1,15 +1,10 @@
-import { Pool } from "pg";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaNeon } from "@prisma/adapter-neon";
 import { PrismaClient } from "../../generated/prisma";
 import { env } from "~/env";
 
 const createPrismaClient = () => {
-  const pool    = new Pool({ connectionString: env.DATABASE_URL });
-  const adapter = new PrismaPg(pool);
-  return new PrismaClient({
-    adapter,
-    log: env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
-  });
+  const adapter = new PrismaNeon({ connectionString: env.DATABASE_URL });
+  return new PrismaClient({ adapter });
 };
 
 const globalForPrisma = globalThis as unknown as {
@@ -17,5 +12,4 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 export const db = globalForPrisma.prisma ?? createPrismaClient();
-
 if (env.NODE_ENV !== "production") globalForPrisma.prisma = db;
