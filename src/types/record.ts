@@ -65,7 +65,7 @@ export type Sort = z.infer<typeof SortSchema>;
 export const RecordListInputSchema = z.object({
   tableId: z.string(),
   cursor:  z.number().optional(),
-  limit:   z.number().min(1).max(200).default(100),
+  limit:   z.number().min(1).max(1000).default(500),
   filters: z.array(FilterSchema).default([]),
   sorts:   z.array(SortSchema).default([]),
   search:  z.string().default(""),

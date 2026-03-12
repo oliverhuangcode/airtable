@@ -12,7 +12,7 @@ import { AddColumnButton } from "./AddColumnButton";
 const ROW_HEIGHT = 32;
 const COL_WIDTH = 180;
 const INDEX_WIDTH = 52;
-const FETCH_LIMIT = 200;
+const FETCH_LIMIT = 500;
 
 interface ActiveCell {
   recordId: string;
@@ -78,7 +78,7 @@ export function TableGrid({
     count: hasNextPage ? records.length + 1 : records.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => ROW_HEIGHT,
-    overscan: 50,
+    overscan: 100,
   });
 
   const virtualItems = rowVirtualizer.getVirtualItems();
@@ -86,7 +86,7 @@ export function TableGrid({
   useEffect(() => {
     const lastItem = virtualItems.at(-1);
     if (!lastItem) return;
-    const fetchThreshold = Math.floor(records.length * 0.8);
+    const fetchThreshold = Math.floor(records.length * 0.2);
     if (
       lastItem.index >= fetchThreshold &&
       hasNextPage &&

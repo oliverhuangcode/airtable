@@ -1,3 +1,4 @@
+// src/features/base/components/BaseView.tsx
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -6,6 +7,7 @@ import { api } from "~/trpc/react";
 import { TableGrid } from "./TableGrid";
 import { TableTabs } from "./TableTabs";
 import { Toolbar } from "./Toolbar";
+import { ViewSidebar } from "./ViewSidebar";
 import { Loader2, AlertCircle } from "lucide-react";
 import type { Filter, Sort, FieldSummary } from "~/types";
 
@@ -24,7 +26,9 @@ export function BaseView({ baseId }: Props) {
   const pathname     = usePathname();
   const searchParams = useSearchParams();
 
+  // ── URL-driven state ──────────────────────────────────────────────────────
   const activeTableId = searchParams.get("tableId");
+  const activeViewId  = searchParams.get("viewId");
   const search        = searchParams.get("search") ?? "";
   const filters       = useMemo<Filter[]>(
     () => parseJSON(searchParams.get("filters"), []),
@@ -39,24 +43,20 @@ export function BaseView({ baseId }: Props) {
 
   const [hiddenFieldIds, setHiddenFieldIds] = useState<string[]>([]);
 
-  // Keep a ref to pathname so updateParams never needs it as a dep
   const pathnameRef = useRef(pathname);
   useEffect(() => { pathnameRef.current = pathname; }, [pathname]);
 
-  // updateParams reads URL fresh from window — never stale, no closure issues
-  // Does NOT use startTransition — that was causing the render-phase call
   const updateParams = useCallback((patch: Record<string, string | null>) => {
-    const params = new URLSearchParams(window.location.search);
-    for (const [key, value] of Object.entries(patch)) {
-      if (value === null || value === "" || value === "[]") {
-        params.delete(key);
-      } else {
-        params.set(key, value);
-      }
-    }
-    const qs = params.toString();
-    // setTimeout pushes the router.replace out of any render cycle entirely
     setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === null || value === "" || value === "[]") {
+          params.delete(key);
+        } else {
+          params.set(key, value);
+        }
+      }
+      const qs = params.toString();
       router.replace(`${pathnameRef.current}${qs ? `?${qs}` : ""}`);
     }, 0);
   }, [router]);
@@ -64,7 +64,6 @@ export function BaseView({ baseId }: Props) {
   // ── READ ──────────────────────────────────────────────────────────────────
   const { data: base, isLoading, error } = api.base.getById.useQuery({ id: baseId });
 
-  // Auto-select first table — only fires when tables first load and no tableId in URL
   const didAutoSelect = useRef(false);
   useEffect(() => {
     if (!didAutoSelect.current && !activeTableId && base?.tables[0]) {
@@ -73,7 +72,6 @@ export function BaseView({ baseId }: Props) {
     }
   }, [base?.tables, activeTableId, updateParams]);
 
-  // Reset hidden fields when switching tables
   useEffect(() => {
     setHiddenFieldIds([]);
   }, [activeTableId]);
@@ -84,6 +82,24 @@ export function BaseView({ baseId }: Props) {
     () => (activeTable?.fields ?? []).filter((f) => !hiddenFieldIds.includes(f.id)),
     [activeTable?.fields, hiddenFieldIds],
   );
+
+  // ── View select — loads saved filters/sorts/hidden into URL + state ───────
+  const handleSelectView = useCallback(({
+    viewId, filters, sorts, hiddenFieldIds,
+  }: {
+    viewId:         string;
+    filters:        Filter[];
+    sorts:          Sort[];
+    hiddenFieldIds: string[];
+  }) => {
+    setHiddenFieldIds(hiddenFieldIds);
+    updateParams({
+      viewId:  viewId,
+      filters: filters.length  ? JSON.stringify(filters) : null,
+      sorts:   sorts.length    ? JSON.stringify(sorts)   : null,
+      search:  null,
+    });
+  }, [updateParams]);
 
   // ── LOADING / ERROR ───────────────────────────────────────────────────────
   if (isLoading) {
@@ -107,46 +123,71 @@ export function BaseView({ baseId }: Props) {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-white">
+      {/* Top nav */}
       <div className="flex h-[56px] flex-shrink-0 items-center border-b border-[#e0e0e0] px-4">
         <span className="text-sm font-semibold text-[#1f1f1f]">{base.name}</span>
       </div>
 
+      {/* Table tabs */}
       <TableTabs
         baseId={baseId}
         tables={base.tables}
         activeTableId={activeTableId}
         onSelectTable={(id) => {
-          updateParams({ tableId: id, search: null, filters: null, sorts: null });
+          updateParams({ tableId: id, viewId: null, search: null, filters: null, sorts: null });
         }}
       />
 
-      {activeTableId && activeTable && (
-        <Toolbar
-          tableId={activeTableId}
-          fields={activeTable.fields}
-          search={search}
-          filters={filters}
-          sorts={sorts}
-          hiddenFieldIds={hiddenFieldIds}
-          onSearchChange={(v) => updateParams({ search: v })}
-          onFiltersChange={(v) => updateParams({ filters: JSON.stringify(v) })}
-          onSortsChange={(v) => updateParams({ sorts: JSON.stringify(v) })}
-          onHiddenFieldsChange={setHiddenFieldIds}
-        />
-      )}
+      {/* Body: sidebar + main content */}
+      <div className="flex flex-1 overflow-hidden">
 
-      {activeTableId && activeTable && (
-        <div className="flex-1 overflow-hidden">
-          <TableGrid
+        {/* Left sidebar — views list */}
+        {activeTableId && (
+          <ViewSidebar
             tableId={activeTableId}
-            fields={visibleFields}
-            allFields={activeTable.fields}
+            activeViewId={activeViewId}
             search={search}
             filters={filters}
             sorts={sorts}
+            hiddenFieldIds={hiddenFieldIds}
+            onSelectView={handleSelectView}
+            onViewIdChange={(id) => updateParams({ viewId: id })}
           />
+        )}
+
+        {/* Main content */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          {/* Toolbar */}
+          {activeTableId && activeTable && (
+            <Toolbar
+              tableId={activeTableId}
+              fields={activeTable.fields}
+              search={search}
+              filters={filters}
+              sorts={sorts}
+              hiddenFieldIds={hiddenFieldIds}
+              onSearchChange={(v) => updateParams({ search: v })}
+              onFiltersChange={(v) => updateParams({ filters: JSON.stringify(v) })}
+              onSortsChange={(v) => updateParams({ sorts: JSON.stringify(v) })}
+              onHiddenFieldsChange={setHiddenFieldIds}
+            />
+          )}
+
+          {/* Grid */}
+          {activeTableId && activeTable && (
+            <div className="flex-1 overflow-hidden">
+              <TableGrid
+                tableId={activeTableId}
+                fields={visibleFields}
+                allFields={activeTable.fields}
+                search={search}
+                filters={filters}
+                sorts={sorts}
+              />
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
