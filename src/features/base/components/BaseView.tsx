@@ -124,7 +124,7 @@ export function BaseView({ baseId }: Props) {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-white">
       {/* Top nav */}
-      <div className="flex h-[56px] flex-shrink-0 items-center border-b border-[#e0e0e0] px-4">
+      <div className="flex h-14 shrink-0 items-center border-b border-[#e0e0e0] px-4">
         <span className="text-sm font-semibold text-[#1f1f1f]">{base.name}</span>
       </div>
 
@@ -151,7 +151,7 @@ export function BaseView({ baseId }: Props) {
             sorts={sorts}
             hiddenFieldIds={hiddenFieldIds}
             onSelectView={handleSelectView}
-            onViewIdChange={(id) => updateParams({ viewId: id })}
+            onViewIdChange={(id: string) => updateParams({ viewId: id })}
           />
         )}
 
