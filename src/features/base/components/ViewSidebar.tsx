@@ -135,43 +135,43 @@ export function ViewSidebar({
   };
 
   return (
-    <div className="flex h-full w-67 shrink-0 flex-col border-r border-[#e0e0e0] bg-white">
+    <div className="flex h-full w-67 shrink-0 flex-col border-r border-[#ddd] bg-[#f7f7f7]">
       {/* Create new button */}
       <button
         onClick={() => setCreating(true)}
-        className="flex items-center gap-2 px-4 py-3 text-[13px] text-[#555] transition-colors hover:bg-[#f5f5f5]"
+        className="flex items-center gap-2 px-4 py-3 text-[13px] font-normal text-[#444] transition-colors hover:bg-[#f0f0f0]"
       >
-        <Plus className="h-3.5 w-3.5 text-[#888]" />
+        <Plus className="h-4 w-4 text-[#666]" />
         <span>Create new...</span>
       </button>
 
       {/* Find a view */}
-      <div className="flex items-center gap-2 border-b border-[#f0f0f0] px-4 pb-3">
-        <div className="flex flex-1 items-center gap-2 rounded-md border border-[#e0e0e0] bg-white px-2.5 py-1.25">
-          <Search className="h-3.25 w-3.25 shrink-0 text-[#aaa]" />
-          <span className="text-[12px] text-[#bbb]">Find a view</span>
+      <div className="flex items-center gap-2 border-b border-[#ddd] px-3 py-3">
+        <div className="flex flex-1 items-center gap-1.5 rounded border border-[#ddd] bg-white px-2 py-1.5">
+          <Search className="h-4 w-4 shrink-0 text-[#999]" />
+          <span className="text-[12px] font-normal text-[#999]">Find a view</span>
         </div>
-        <button className="rounded p-1 text-[#aaa] hover:bg-[#f0f0f0] hover:text-[#666]">
-          <Settings className="h-3.5 w-3.5" />
+        <button className="rounded p-1 text-[#999] hover:bg-[#efefef] hover:text-[#555]">
+          <Settings className="h-4 w-4" />
         </button>
       </div>
 
       {/* Views list */}
-      <div className="flex-1 overflow-y-auto py-1">
+      <div className="flex-1 overflow-y-auto">
         {views.map((view) => {
           const isActive = view.id === activeViewId;
           return (
             <button
               key={view.id}
               onClick={() => handleSelectView(view.id)}
-              className={`flex w-full items-center gap-2 px-3 py-1.75 text-left transition-colors ${
+              className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors ${
                 isActive
-                  ? "bg-[#e8f0fd] text-[#1170cb]"
-                  : "text-[#333] hover:bg-[#f5f5f5]"
+                  ? "bg-[#e3f2fd] text-[#1a73e8]"
+                  : "text-[#444] hover:bg-[#f0f0f0]"
               }`}
             >
-              <LayoutGrid className={`h-3.5 w-3.5 shrink-0 ${isActive ? "text-[#1170cb]" : "text-[#888]"}`} />
-              <span className="truncate text-[13px] font-medium">{view.name}</span>
+              <LayoutGrid className={`h-4 w-4 shrink-0 ${isActive ? "text-[#1a73e8]" : "text-[#888]"}`} />
+              <span className="truncate text-[13px] font-normal">{view.name}</span>
             </button>
           );
         })}
@@ -179,7 +179,7 @@ export function ViewSidebar({
 
       {/* Create new view form */}
       {creating && (
-        <div className="border-t border-[#f0f0f0] px-4 py-3">
+        <div className="border-t border-[#ddd] bg-white px-3 py-3">
           <div className="flex flex-col gap-2">
             <input
               autoFocus
@@ -190,19 +190,19 @@ export function ViewSidebar({
                 if (e.key === "Escape") { setCreating(false); setNewName(""); }
               }}
               placeholder="View name"
-              className="w-full rounded border border-[#1170cb] px-2 py-1 text-xs outline-none"
+              className="w-full rounded border border-[#ddd] bg-white px-2.5 py-1.5 text-[12px] font-normal outline-none focus:border-[#1a73e8] focus:bg-white"
             />
-            <div className="flex gap-1">
+            <div className="flex gap-2">
               <button
                 onClick={handleCreate}
                 disabled={createView.isPending}
-                className="flex flex-1 items-center justify-center gap-1 rounded bg-[#1170cb] py-1 text-[10px] text-white disabled:opacity-50"
+                className="flex flex-1 items-center justify-center gap-1 rounded bg-[#1a73e8] py-1.5 text-[12px] font-medium text-white disabled:opacity-50"
               >
                 {createView.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Create view"}
               </button>
               <button
                 onClick={() => { setCreating(false); setNewName(""); }}
-                className="rounded border border-[#e0e0e0] px-2 py-1 text-[10px] text-[#666] hover:bg-[#f0f0f0]"
+                className="rounded border border-[#ddd] bg-white px-3 py-1.5 text-[12px] font-normal text-[#666] hover:bg-[#f9f9f9]"
               >
                 Cancel
               </button>
