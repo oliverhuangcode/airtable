@@ -4,17 +4,16 @@
 import { useRef, useState, useCallback, useEffect, useMemo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { api } from "~/trpc/react";
-import type { InfiniteData } from "@tanstack/react-query";
 import { Plus, Loader2 } from "lucide-react";
-import type { FieldSummary, Filter, Sort, Row, RecordListOutput } from "~/types";
+import type { FieldSummary, Filter, Sort, Row } from "~/types";
 import { CellEditor } from "./CellEditor";
 import { AddColumnButton } from "./AddColumnButton";
 
-const ROW_HEIGHT       = 32;
-const COL_WIDTH        = 180;
-const INDEX_WIDTH      = 52;
-const FETCH_LIMIT      = 5000;
-const FETCH_THRESHOLD  = 0.3; // fetch next page when 50% of loaded rows are scrolled past
+const ROW_HEIGHT      = 36;
+const COL_WIDTH       = 180;
+const INDEX_WIDTH     = 96; // checkbox (32) + row number (64)
+const FETCH_LIMIT     = 5000;
+const FETCH_THRESHOLD = 0.3;
 
 interface ActiveCell {
   recordId: string;
@@ -26,16 +25,55 @@ interface ActiveCell {
 interface Props {
   tableId:   string;
   fields:    FieldSummary[];
-  allFields: FieldSummary[];
+  allFields?: FieldSummary[];
   search:    string;
   filters:   Filter[];
   sorts:     Sort[];
 }
 
-export function TableGrid({ tableId, fields, allFields, search, filters, sorts }: Props) {
-  const parentRef = useRef<HTMLDivElement>(null);
-  const [activeCell, setActiveCell] = useState<ActiveCell | null>(null);
-  const cellRefs  = useRef<Map<string, HTMLDivElement>>(new Map());
+// Field type icon — matches Airtable header icons exactly
+function FieldTypeIcon({ type }: { type: string }) {
+  if (type === "NUMBER") {
+    return (
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="flex-shrink-0 text-[#666]">
+        <text x="1" y="13" fontSize="13" fontWeight="600" fill="currentColor" fontFamily="monospace">#</text>
+      </svg>
+    );
+  }
+  return (
+    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="flex-shrink-0 text-[#666]">
+      <rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="currentColor" />
+      <rect x="2" y="7" width="9" height="1.5" rx="0.75" fill="currentColor" />
+      <rect x="2" y="11" width="11" height="1.5" rx="0.75" fill="currentColor" />
+    </svg>
+  );
+}
+
+// Checkbox — matches Airtable's rounded square style
+function Checkbox({ checked, onChange }: { checked: boolean; onChange?: () => void }) {
+  return (
+    <div
+      onClick={(e) => { e.stopPropagation(); onChange?.(); }}
+      className={`h-[15px] w-[15px] flex-shrink-0 cursor-pointer rounded-[3px] border transition-colors ${
+        checked
+          ? "border-[#1170cb] bg-[#1170cb]"
+          : "border-[#c8c8c8] bg-white hover:border-[#a0a0a0]"
+      }`}
+    >
+      {checked && (
+        <svg viewBox="0 0 10 8" fill="none" className="h-full w-full p-[2px]">
+          <path d="M1 4l3 3 5-6" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </div>
+  );
+}
+
+export function TableGrid({ tableId, fields, allFields: _allFields, search, filters, sorts }: Props) {
+  const parentRef             = useRef<HTMLDivElement>(null);
+  const [activeCell, setActiveCell]       = useState<ActiveCell | null>(null);
+  const [selectedRows, setSelectedRows]   = useState<Set<string>>(new Set());
+  const cellRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const setCellRef = useCallback((recordId: string, fieldId: string, el: HTMLDivElement | null) => {
     const key = `${recordId}:${fieldId}`;
@@ -103,6 +141,7 @@ export function TableGrid({ tableId, fields, allFields, search, filters, sorts }
   }, [lastItemIndex, allRows.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // ── Focus active cell ─────────────────────────────────────────────────────
+  // Focus active cell
   useEffect(() => {
     if (!activeCell) return;
     const key = `${activeCell.recordId}:${activeCell.fieldId}`;
@@ -118,7 +157,7 @@ export function TableGrid({ tableId, fields, allFields, search, filters, sorts }
       if (elRect.bottom > parentRect.bottom) parent.scrollTop += elRect.bottom - parentRect.bottom + 4;
       else if (elRect.top < parentRect.top)  parent.scrollTop -= parentRect.top - elRect.top + 4;
     });
-  }, [activeCell?.recordId, activeCell?.fieldId]);
+  }, [activeCell]);
 
   // ── Optimistic cell update ────────────────────────────────────────────────
   const updateCell = api.record.updateCell.useMutation({
@@ -211,19 +250,18 @@ export function TableGrid({ tableId, fields, allFields, search, filters, sorts }
     [fields, allRows, total],
   );
 
-  // Wait for count before showing anything
-  if (!countData) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <Loader2 className="h-5 w-5 animate-spin text-[#1170cb]" />
-      </div>
-    );
-  }
+  const toggleRow = useCallback((id: string) => {
+    setSelectedRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else              next.add(id);
+      return next;
+    });
+  }, []);
 
-  // Count loaded but first page still fetching
-  if (status === "pending") {
+  if (!countData || status === "pending") {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex h-full items-center justify-center bg-white">
         <Loader2 className="h-5 w-5 animate-spin text-[#1170cb]" />
       </div>
     );
@@ -232,25 +270,40 @@ export function TableGrid({ tableId, fields, allFields, search, filters, sorts }
   const totalWidth = INDEX_WIDTH + fields.length * COL_WIDTH + 52;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      {/* Column headers */}
+    <div className="flex h-full flex-col overflow-hidden bg-white">
+
+      {/* ── Column headers ── */}
       <div
-        className="flex flex-shrink-0 border-b border-[#e0e0e0] bg-[#f8f8f8]"
+        className="flex shrink-0 border-b border-[#e0e0e0] bg-[#f8f8f8]"
         style={{ width: totalWidth, minWidth: "100%" }}
       >
-        <div className="flex flex-shrink-0 items-center justify-center border-r border-[#e0e0e0]"
-          style={{ width: INDEX_WIDTH, height: ROW_HEIGHT }} />
+        {/* Checkbox + expand column header */}
+        <div
+          className="flex shrink-0 items-center justify-end gap-1.5 border-r border-[#e0e0e0] pr-2"
+          style={{ width: INDEX_WIDTH, height: ROW_HEIGHT }}
+        >
+          <Checkbox checked={selectedRows.size === allRows.length && allRows.length > 0} />
+        </div>
+
+        {/* Field headers */}
         {fields.map((field) => (
-          <div key={field.id} className="flex flex-shrink-0 items-center gap-1.5 border-r border-[#e0e0e0] px-3"
-            style={{ width: COL_WIDTH, height: ROW_HEIGHT }}>
-            <span className="text-[10px] text-[#999]">{field.type === "NUMBER" ? "#" : "T"}</span>
-            <span className="truncate text-xs font-medium text-[#1f1f1f]">{field.name}</span>
+          <div
+            key={field.id}
+            className="flex shrink-0 cursor-pointer items-center gap-[6px] border-r border-[#e0e0e0] px-3 hover:bg-[#f0f0f0]"
+            style={{ width: COL_WIDTH, height: ROW_HEIGHT }}
+          >
+            <FieldTypeIcon type={field.type} />
+            <span className="truncate text-[13px] font-medium text-[#1f1f1f]">{field.name}</span>
           </div>
         ))}
-        <div className="relative"><AddColumnButton tableId={tableId} /></div>
+
+        {/* Add column button */}
+        <div className="relative shrink-0">
+          <AddColumnButton tableId={tableId} />
+        </div>
       </div>
 
-      {/* Virtualised rows */}
+      {/* ── Virtualised rows ── */}
       <div
         ref={parentRef}
         className="flex-1 overflow-auto"
@@ -259,18 +312,19 @@ export function TableGrid({ tableId, fields, allFields, search, filters, sorts }
           if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) e.preventDefault();
         }}
       >
-        <div style={{
-          height:   rowVirtualizer.getTotalSize(),
-          width:    totalWidth,
-          minWidth: "100%",
-          position: "relative",
-        }}>
+        <div
+          style={{
+            height:   rowVirtualizer.getTotalSize(),
+            width:    totalWidth,
+            minWidth: "100%",
+            position: "relative",
+          }}
+        >
           {virtualItems.map((virtualRow) => {
-            const record = allRows[virtualRow.index];
+            const record    = allRows[virtualRow.index];
+            const isSelected = record ? selectedRows.has(record.id) : false;
 
-            // Row not yet loaded — render empty row (no skeleton, just blank)
-            // This happens when scrolling faster than pages load, or when
-            // jumping to the bottom. Rows fill in as pages arrive.
+            // Unloaded row — blank placeholder, structure preserved
             if (!record) {
               return (
                 <div
@@ -278,13 +332,13 @@ export function TableGrid({ tableId, fields, allFields, search, filters, sorts }
                   style={{ position: "absolute", top: virtualRow.start, width: "100%", height: ROW_HEIGHT, display: "flex" }}
                   className="border-b border-[#e8e8e8]"
                 >
-                  <div className="flex-shrink-0 border-r border-[#e0e0e0] text-[11px] text-[#bbb] flex items-center justify-center"
+                  <div className="flex shrink-0 items-center justify-end gap-1.5 border-r border-[#e0e0e0] pr-2"
                     style={{ width: INDEX_WIDTH }}>
-                    {virtualRow.index + 1}
+                    <span className="text-[12px] text-[#999]">{virtualRow.index + 1}</span>
                   </div>
-                  {fields.map((field) => (
-                    <div key={field.id} className="flex-shrink-0 border-r border-[#e0e0e0]"
-                      style={{ width: COL_WIDTH, height: ROW_HEIGHT }} />
+                  {fields.map((f) => (
+                    <div key={f.id} className="shrink-0 border-r border-[#e0e0e0]"
+                      style={{ width: COL_WIDTH }} />
                   ))}
                 </div>
               );
@@ -294,15 +348,31 @@ export function TableGrid({ tableId, fields, allFields, search, filters, sorts }
               <div
                 key={virtualRow.key}
                 style={{ position: "absolute", top: virtualRow.start, width: "100%", height: ROW_HEIGHT, display: "flex" }}
-                className="border-b border-[#e8e8e8] hover:bg-[#f9f9f9]"
+                className={`group border-b border-[#e8e8e8] ${isSelected ? "bg-[#edf4ff]" : "hover:bg-[#f9f9f9]"}`}
               >
+                {/* Row index + checkbox */}
                 <div
-                  className="flex flex-shrink-0 items-center justify-center border-r border-[#e0e0e0] text-[11px] text-[#bbb]"
-                  style={{ width: INDEX_WIDTH }}
+                  className="flex shrink-0 items-center justify-end gap-[6px] border-r border-[#e0e0e0] pr-2"
+                  style={{ width: INDEX_WIDTH, height: ROW_HEIGHT }}
                 >
-                  {virtualRow.index + 1}
+                  {/* Row number — hidden on hover/select, replaced by checkbox */}
+                  <span className={`text-[12px] text-[#999] transition-opacity ${isSelected ? "opacity-0 group-hover:opacity-0" : "opacity-100 group-hover:opacity-0"}`}
+                    style={{ position: "absolute", right: 36 }}>
+                    {virtualRow.index + 1}
+                  </span>
+                  {/* Expand icon — only on hover */}
+                  <div className={`absolute right-[18px] transition-opacity ${isSelected || true ? "opacity-0 group-hover:opacity-100" : "opacity-0"}`}>
+                    <svg width="11" height="11" viewBox="0 0 14 14" fill="none" className="text-[#aaa]">
+                      <path d="M2 2h4M2 2v4M12 2h-4M12 2v4M2 12h4M2 12v-4M12 12h-4M12 12v-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                    </svg>
+                  </div>
+                  <Checkbox
+                    checked={isSelected}
+                    onChange={() => toggleRow(record.id)}
+                  />
                 </div>
 
+                {/* Cells */}
                 {fields.map((field, colIndex) => {
                   const isActive = activeCell?.recordId === record.id && activeCell?.fieldId === field.id;
                   const value    = record.data[field.id] ?? null;
@@ -311,7 +381,11 @@ export function TableGrid({ tableId, fields, allFields, search, filters, sorts }
                     <div
                       key={field.id}
                       ref={(el) => setCellRef(record.id, field.id, el)}
-                      className={`relative flex-shrink-0 border-r border-[#e0e0e0] ${isActive ? "z-10 outline outline-2 outline-[#1170cb]" : ""}`}
+                      className={`relative shrink-0 border-r border-[#e0e0e0] ${
+                        isActive
+                          ? "z-10 shadow-[inset_0_0_0_2px_#1170cb]"
+                          : ""
+                      }`}
                       style={{ width: COL_WIDTH, height: ROW_HEIGHT }}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -322,7 +396,9 @@ export function TableGrid({ tableId, fields, allFields, search, filters, sorts }
                         value={value}
                         fieldType={field.type}
                         isActive={isActive}
-                        onCommit={(newValue) => updateCell.mutate({ recordId: record.id, fieldId: field.id, value: newValue })}
+                        onCommit={(newValue) =>
+                          updateCell.mutate({ recordId: record.id, fieldId: field.id, value: newValue })
+                        }
                         onKeyDown={(e) => handleKeyDown(e, virtualRow.index, colIndex)}
                       />
                     </div>
@@ -334,28 +410,43 @@ export function TableGrid({ tableId, fields, allFields, search, filters, sorts }
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="flex flex-shrink-0 items-center justify-between border-t border-[#e0e0e0] bg-white px-4 py-2">
-        <div className="flex items-center gap-3">
+      {/* ── Footer ── */}
+      <div className="flex shrink-0 items-center justify-between border-t border-[#e0e0e0] bg-[#f8f8f8] px-3 py-0" style={{ height: 36 }}>
+        <div className="flex items-center gap-2">
+          {/* Add row */}
           <button
             onClick={() => createRecord.mutate({ tableId })}
             disabled={createRecord.isPending}
-            className="flex items-center gap-1.5 text-xs text-[#666] transition-colors hover:text-[#1170cb]"
+            className="flex items-center gap-[5px] rounded px-2 py-1 text-[13px] text-[#555] transition-colors hover:bg-[#ebebeb]"
           >
             <Plus className="h-3.5 w-3.5" />
-            Add row
+            <span>Add row</span>
           </button>
+
+          <div className="h-4 w-px bg-[#e0e0e0]" />
+
+          {/* 100k rows button */}
           <button
             onClick={() => bulkCreate.mutate({ tableId, count: 100000 })}
             disabled={bulkCreate.isPending}
-            className="flex items-center gap-1.5 rounded border border-[#e0e0e0] px-2.5 py-1 text-xs text-[#666] transition-colors hover:border-[#1170cb] hover:text-[#1170cb]"
+            className="flex items-center gap-[5px] rounded px-2 py-1 text-[13px] text-[#555] transition-colors hover:bg-[#ebebeb]"
           >
-            {bulkCreate.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "+ 100k rows"}
+            {bulkCreate.isPending
+              ? <><Loader2 className="h-3 w-3 animate-spin" /><span>Adding 100k rows…</span></>
+              : <><Plus className="h-3.5 w-3.5" /><span>100k rows</span></>
+            }
           </button>
         </div>
+
         <div className="flex items-center gap-2">
-          {isFetchingNextPage && <span className="text-xs text-[#999]">Loading...</span>}
-          <span className="text-xs text-[#999]">{total.toLocaleString()} rows</span>
+          {isFetchingNextPage && (
+            <span className="flex items-center gap-1 text-[12px] text-[#999]">
+              <Loader2 className="h-3 w-3 animate-spin" /> Loading…
+            </span>
+          )}
+          <span className="text-[12px] text-[#777]">
+            {total.toLocaleString()} {total === 1 ? "record" : "records"}
+          </span>
         </div>
       </div>
     </div>
