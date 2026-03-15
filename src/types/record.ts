@@ -1,11 +1,9 @@
 import { z } from "zod";
 
 // ─── Row ──────────────────────────────────────────────────────────────────────
-// `data` is a flat object keyed by fieldId → value
-// e.g. { "cldx1": "Alice Johnson", "cldx2": 42 }
 
 export const RowDataSchema = z.record(
-  z.string(), // fieldId
+  z.string(),
   z.union([z.string(), z.number(), z.null()]),
 );
 export type RowData = z.infer<typeof RowDataSchema>;
@@ -55,7 +53,7 @@ export type Filter = z.infer<typeof FilterSchema>;
 
 export const SortSchema = z.object({
   fieldId:   z.string(),
-  fieldType: z.enum(["TEXT", "NUMBER"]), // needed to cast correctly in SQL
+  fieldType: z.enum(["TEXT", "NUMBER"]),
   direction: z.enum(["asc", "desc"]),
 });
 export type Sort = z.infer<typeof SortSchema>;
@@ -64,8 +62,8 @@ export type Sort = z.infer<typeof SortSchema>;
 
 export const RecordListInputSchema = z.object({
   tableId: z.string(),
-  cursor:  z.number().optional(),
-  limit:   z.number().min(1).max(1000).default(500),
+  cursor:  z.number().optional(), 
+  limit:   z.number().min(1).max(10000).default(5000),
   filters: z.array(FilterSchema).default([]),
   sorts:   z.array(SortSchema).default([]),
   search:  z.string().default(""),

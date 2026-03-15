@@ -1,37 +1,25 @@
 import "dotenv/config";
-import { Pool } from "pg";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaNeon } from "@prisma/adapter-neon";
 import { PrismaClient, FieldType } from "../generated/prisma/client";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL is not set in .env");
 }
 
-// ─── Replace this with your real Google email ─────────────────────────────────
-// This must match the email on your Google account so the seed data
-// is owned by your real user after you sign in via Google OAuth.
 const DEV_EMAIL = process.env.SEED_USER_EMAIL ?? "oliverwhuang@gmail.com";
 
-const pool    = new Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaPg(pool);
+const adapter = new PrismaNeon({ connectionString: process.env.DATABASE_URL });
 const prisma  = new PrismaClient({ adapter });
 
 async function main() {
-  // ─── Clean slate ─────────────────────────────────────────────────────────
   await prisma.record.deleteMany();
   await prisma.field.deleteMany();
   await prisma.view.deleteMany();
   await prisma.table.deleteMany();
   await prisma.base.deleteMany();
 
-  // don't wipe users — NextAuth may have already created your real account
-  // instead upsert so we don't break existing sessions
-
   console.log("🗑️  Cleared bases, tables, fields, records");
 
-  // ─── Upsert dev user ─────────────────────────────────────────────────────
-  // If you've already signed in via Google, this will find your existing user.
-  // If not, it creates a placeholder that will merge when you first sign in.
   const alice = await prisma.user.upsert({
     where:  { email: DEV_EMAIL },
     update: {},
@@ -46,55 +34,39 @@ async function main() {
 
   console.log(`👤 Upserted users (primary: ${alice.email})`);
 
-  // ─── Bases ───────────────────────────────────────────────────────────────
-  const [crmBase, projectBase, hiringBase] = await Promise.all([
-    prisma.base.create({ data: { name: "CRM",             createdById: alice.id } }),
-    prisma.base.create({ data: { name: "Project Tracker", createdById: alice.id } }),
-    prisma.base.create({ data: { name: "Hiring Pipeline", createdById: bob.id   } }),
-  ]);
+  const crmBase     = await prisma.base.create({ data: { name: "CRM",             createdById: alice.id } });
+  const projectBase = await prisma.base.create({ data: { name: "Project Tracker", createdById: alice.id } });
+  const hiringBase  = await prisma.base.create({ data: { name: "Hiring Pipeline", createdById: bob.id   } });
 
   console.log("📦 Created 3 bases");
 
-  // ─── Tables ──────────────────────────────────────────────────────────────
-  const [contactsTable, dealsTable, tasksTable, candidatesTable] = await Promise.all([
-    prisma.table.create({ data: { name: "Contacts",   baseId: crmBase.id,     order: 0 } }),
-    prisma.table.create({ data: { name: "Deals",      baseId: crmBase.id,     order: 1 } }),
-    prisma.table.create({ data: { name: "Tasks",      baseId: projectBase.id, order: 0 } }),
-    prisma.table.create({ data: { name: "Candidates", baseId: hiringBase.id,  order: 0 } }),
-  ]);
+  const contactsTable   = await prisma.table.create({ data: { name: "Contacts",   baseId: crmBase.id,     order: 0 } });
+  const dealsTable      = await prisma.table.create({ data: { name: "Deals",      baseId: crmBase.id,     order: 1 } });
+  const tasksTable      = await prisma.table.create({ data: { name: "Tasks",      baseId: projectBase.id, order: 0 } });
+  const candidatesTable = await prisma.table.create({ data: { name: "Candidates", baseId: hiringBase.id,  order: 0 } });
 
   console.log("📋 Created 4 tables");
 
-  // ─── Fields ──────────────────────────────────────────────────────────────
-  const [cName, cEmail, cCompany, cScore] = await Promise.all([
-    prisma.field.create({ data: { name: "Name",       type: FieldType.TEXT,   tableId: contactsTable.id, order: 0 } }),
-    prisma.field.create({ data: { name: "Email",      type: FieldType.TEXT,   tableId: contactsTable.id, order: 1 } }),
-    prisma.field.create({ data: { name: "Company",    type: FieldType.TEXT,   tableId: contactsTable.id, order: 2 } }),
-    prisma.field.create({ data: { name: "Lead Score", type: FieldType.NUMBER, tableId: contactsTable.id, order: 3 } }),
-  ]);
+  const cName    = await prisma.field.create({ data: { name: "Name",       type: FieldType.TEXT,   tableId: contactsTable.id, order: 0 } });
+  const cEmail   = await prisma.field.create({ data: { name: "Email",      type: FieldType.TEXT,   tableId: contactsTable.id, order: 1 } });
+  const cCompany = await prisma.field.create({ data: { name: "Company",    type: FieldType.TEXT,   tableId: contactsTable.id, order: 2 } });
+  const cScore   = await prisma.field.create({ data: { name: "Lead Score", type: FieldType.NUMBER, tableId: contactsTable.id, order: 3 } });
 
-  const [dName, dValue, dStage] = await Promise.all([
-    prisma.field.create({ data: { name: "Deal Name", type: FieldType.TEXT,   tableId: dealsTable.id, order: 0 } }),
-    prisma.field.create({ data: { name: "Value",     type: FieldType.NUMBER, tableId: dealsTable.id, order: 1 } }),
-    prisma.field.create({ data: { name: "Stage",     type: FieldType.TEXT,   tableId: dealsTable.id, order: 2 } }),
-  ]);
+  const dName  = await prisma.field.create({ data: { name: "Deal Name", type: FieldType.TEXT,   tableId: dealsTable.id, order: 0 } });
+  const dValue = await prisma.field.create({ data: { name: "Value",     type: FieldType.NUMBER, tableId: dealsTable.id, order: 1 } });
+  const dStage = await prisma.field.create({ data: { name: "Stage",     type: FieldType.TEXT,   tableId: dealsTable.id, order: 2 } });
 
-  const [tTitle, tStatus, tPriority] = await Promise.all([
-    prisma.field.create({ data: { name: "Title",    type: FieldType.TEXT,   tableId: tasksTable.id, order: 0 } }),
-    prisma.field.create({ data: { name: "Status",   type: FieldType.TEXT,   tableId: tasksTable.id, order: 1 } }),
-    prisma.field.create({ data: { name: "Priority", type: FieldType.NUMBER, tableId: tasksTable.id, order: 2 } }),
-  ]);
+  const tTitle    = await prisma.field.create({ data: { name: "Title",    type: FieldType.TEXT,   tableId: tasksTable.id, order: 0 } });
+  const tStatus   = await prisma.field.create({ data: { name: "Status",   type: FieldType.TEXT,   tableId: tasksTable.id, order: 1 } });
+  const tPriority = await prisma.field.create({ data: { name: "Priority", type: FieldType.NUMBER, tableId: tasksTable.id, order: 2 } });
 
-  const [candName, candRole, candSalary, candStage] = await Promise.all([
-    prisma.field.create({ data: { name: "Name",   type: FieldType.TEXT,   tableId: candidatesTable.id, order: 0 } }),
-    prisma.field.create({ data: { name: "Role",   type: FieldType.TEXT,   tableId: candidatesTable.id, order: 1 } }),
-    prisma.field.create({ data: { name: "Salary", type: FieldType.NUMBER, tableId: candidatesTable.id, order: 2 } }),
-    prisma.field.create({ data: { name: "Stage",  type: FieldType.TEXT,   tableId: candidatesTable.id, order: 3 } }),
-  ]);
+  const candName   = await prisma.field.create({ data: { name: "Name",   type: FieldType.TEXT,   tableId: candidatesTable.id, order: 0 } });
+  const candRole   = await prisma.field.create({ data: { name: "Role",   type: FieldType.TEXT,   tableId: candidatesTable.id, order: 1 } });
+  const candSalary = await prisma.field.create({ data: { name: "Salary", type: FieldType.NUMBER, tableId: candidatesTable.id, order: 2 } });
+  const candStage  = await prisma.field.create({ data: { name: "Stage",  type: FieldType.TEXT,   tableId: candidatesTable.id, order: 3 } });
 
   console.log("🔲 Created fields");
 
-  // ─── Records ─────────────────────────────────────────────────────────────
   await prisma.record.createMany({
     data: [
       { tableId: contactsTable.id, order: 0, data: { [cName.id]: "Jordan Lee",   [cEmail.id]: "jordan@acme.com",    [cCompany.id]: "Acme Corp", [cScore.id]: 92 } },

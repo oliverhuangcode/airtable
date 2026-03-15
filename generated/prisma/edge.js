@@ -39,12 +39,12 @@ exports.Prisma = Prisma
 exports.$Enums = {}
 
 /**
- * Prisma Client JS version: 7.4.2
- * Query Engine version: 94a226be1cf2967af2541cca5529f0f7ba866919
+ * Prisma Client JS version: 7.5.0
+ * Query Engine version: 280c870be64f457428992c43c1f6d557fab6e29e
  */
 Prisma.prismaVersion = {
-  client: "7.4.2",
-  engine: "94a226be1cf2967af2541cca5529f0f7ba866919"
+  client: "7.5.0",
+  engine: "280c870be64f457428992c43c1f6d557fab6e29e"
 }
 
 Prisma.PrismaClientKnownRequestError = PrismaClientKnownRequestError;
@@ -222,8 +222,8 @@ exports.Prisma.ModelName = {
  */
 const config = {
   "previewFeatures": [],
-  "clientVersion": "7.4.2",
-  "engineVersion": "94a226be1cf2967af2541cca5529f0f7ba866919",
+  "clientVersion": "7.5.0",
+  "engineVersion": "280c870be64f457428992c43c1f6d557fab6e29e",
   "activeProvider": "postgresql",
   "inlineSchema": "// This is your Prisma schema file,\n// learn more about it in the docs: https://pris.ly/d/prisma-schema\n\ngenerator client {\n  provider = \"prisma-client-js\"\n  output   = \"../generated/prisma\"\n}\n\ngenerator zod {\n  provider = \"prisma-zod-generator\"\n  output   = \"../generated/zod\"\n}\n\ndatasource db {\n  provider = \"postgresql\"\n}\n\n// ─── NextAuth models ──────────────────────────────────────────────────────────\n// Required by @auth/prisma-adapter — do not modify field names\n\nmodel Account {\n  id                String  @id @default(cuid())\n  userId            String\n  type              String\n  provider          String\n  providerAccountId String\n  refresh_token     String? @db.Text\n  access_token      String? @db.Text\n  expires_at        Int?\n  token_type        String?\n  scope             String?\n  id_token          String? @db.Text\n  session_state     String?\n\n  user User @relation(fields: [userId], references: [id], onDelete: Cascade)\n\n  @@unique([provider, providerAccountId])\n}\n\nmodel Session {\n  id           String   @id @default(cuid())\n  sessionToken String   @unique\n  userId       String\n  expires      DateTime\n  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)\n}\n\nmodel VerificationToken {\n  identifier String\n  token      String   @unique\n  expires    DateTime\n\n  @@unique([identifier, token])\n}\n\n// ─── App models ───────────────────────────────────────────────────────────────\n//\n//  User → Base → Table → Field   (column definitions)\n//                      → Record  (row data stored as JSON blob)\n//                      → View    (saved filter/sort/hidden config)\n//\n// ─────────────────────────────────────────────────────────────────────────────\n\nmodel User {\n  id            String    @id @default(cuid())\n  name          String? // nullable — NextAuth adapter requires this\n  email         String?   @unique // nullable — NextAuth adapter requires this\n  emailVerified DateTime? // required by NextAuth adapter\n  image         String? // required by NextAuth adapter\n  accounts      Account[]\n  sessions      Session[]\n\n  // app relations\n  bases Base[]\n\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n}\n\nmodel Base {\n  id          String   @id @default(cuid())\n  name        String\n  createdById String\n  createdBy   User     @relation(fields: [createdById], references: [id])\n  createdAt   DateTime @default(now())\n  updatedAt   DateTime @updatedAt\n  tables      Table[]\n}\n\nmodel Table {\n  id        String   @id @default(cuid())\n  name      String\n  baseId    String\n  base      Base     @relation(fields: [baseId], references: [id], onDelete: Cascade)\n  order     Int      @default(0)\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n  fields    Field[]\n  records   Record[]\n  views     View[]\n\n  @@index([baseId, order])\n}\n\nenum FieldType {\n  TEXT\n  NUMBER\n}\n\nmodel Field {\n  id        String    @id @default(cuid())\n  name      String\n  type      FieldType @default(TEXT)\n  tableId   String\n  table     Table     @relation(fields: [tableId], references: [id], onDelete: Cascade)\n  order     Int       @default(0)\n  createdAt DateTime  @default(now())\n  updatedAt DateTime  @updatedAt\n\n  @@unique([tableId, name])\n  @@index([tableId, order])\n}\n\nmodel Record {\n  id      String @id @default(cuid())\n  tableId String\n  table   Table  @relation(fields: [tableId], references: [id], onDelete: Cascade)\n  order   Int    @default(0)\n\n  // All cell values stored as a JSON blob keyed by fieldId\n  // e.g. { \"fieldId_abc\": \"Alice\", \"fieldId_xyz\": 42 }\n  data Json @default(\"{}\")\n\n  createdAt DateTime @default(now())\n  updatedAt DateTime @updatedAt\n\n  @@index([tableId, order])\n}\n\nmodel View {\n  id           String   @id @default(cuid())\n  name         String\n  tableId      String\n  table        Table    @relation(fields: [tableId], references: [id], onDelete: Cascade)\n  filters      Json     @default(\"[]\")\n  sorts        Json     @default(\"[]\")\n  hiddenFields Json     @default(\"[]\")\n  createdAt    DateTime @default(now())\n  updatedAt    DateTime @updatedAt\n\n  @@index([tableId])\n}\n"
 }
