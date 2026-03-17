@@ -360,7 +360,7 @@ export function ViewSidebar({
       </div>
 
       {/* Find a view */}
-      <div className="flex items-center gap-2 border-b border-black/10 px-3 pb-3 mt-0.5">
+      <div className="flex items-center gap-2 px-3 pb-3 mt-0.5">
         <div className="flex flex-1 items-center gap-1.5 bg-white px-2 py-1.5">
           <Search className="h-3.5 w-3.5 shrink-0 text-[#999]" />
           <input
