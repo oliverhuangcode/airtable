@@ -200,7 +200,7 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
 
       utils.record.listAll.setData(queryKey, (old) => {
         if (!old) return old;
-        return { ...old, records: [...old.records, tempRow], total: old.total + 1 };
+        return { ...old, records: [...old.records as Row[], tempRow], total: old.total + 1 };
       });
 
       const firstField = fields[0];
