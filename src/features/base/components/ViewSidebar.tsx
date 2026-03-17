@@ -3,7 +3,10 @@
 
 import { useState, useEffect, useRef } from "react";
 import { api } from "~/trpc/react";
-import { Search, Settings, Loader2, Plus, MoreHorizontal, Star, GripVertical, Pencil, Copy, Trash2 } from "lucide-react";
+import { Loader2, Star, Pencil, Copy, Trash2 } from "lucide-react";
+import {
+  GridFeatureIcon, MagnifyingGlassIcon, CogIcon, PlusIcon, DotsSixVerticalIcon, OverflowIcon,
+} from "~/components/icons/AirtableIcons";
 import type { Filter, Sort } from "~/types";
 
 interface Props {
@@ -23,15 +26,7 @@ interface Props {
 }
 
 function GridIcon({ active }: { active: boolean }) {
-  const color = active ? "#2d7ff9" : "#666";
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
-      <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="0.5" fill={color} />
-      <rect x="9" y="1.5" width="5.5" height="5.5" rx="0.5" fill={color} />
-      <rect x="1.5" y="9" width="5.5" height="5.5" rx="0.5" fill={color} />
-      <rect x="9" y="9" width="5.5" height="5.5" rx="0.5" fill={color} />
-    </svg>
-  );
+  return <GridFeatureIcon size={16} fill={active ? "rgb(22, 110, 225)" : "#666"} className="shrink-0" />;
 }
 
 /* ── View context menu icons ─────────────────────────── */
@@ -122,14 +117,7 @@ function TeamBadge() {
 }
 
 function NewViewGridIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
-      <rect x="2" y="2" width="6" height="6" rx="0.5" fill="#2d7ff9" />
-      <rect x="10" y="2" width="6" height="6" rx="0.5" fill="#2d7ff9" />
-      <rect x="2" y="10" width="6" height="6" rx="0.5" fill="#2d7ff9" />
-      <rect x="10" y="10" width="6" height="6" rx="0.5" fill="#2d7ff9" />
-    </svg>
-  );
+  return <GridFeatureIcon size={18} fill="#2d7ff9" />;
 }
 
 /* ── View context menu ──────────────────────────────── */
@@ -351,7 +339,7 @@ export function ViewSidebar({
           onClick={() => setShowCreatePicker((v) => !v)}
           className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-[13px] text-[#1d1f25] transition-colors hover:bg-black/5"
         >
-          <Plus className="h-4 w-4 text-[#666]" />
+          <PlusIcon size={16} className="text-[#666]" />
           <span>Create new...</span>
         </button>
         {showCreatePicker && (
@@ -362,7 +350,7 @@ export function ViewSidebar({
       {/* Find a view */}
       <div className="flex items-center gap-2 px-3 pb-3 mt-0.5">
         <div className="flex flex-1 items-center gap-1.5 bg-white px-2 py-1.5">
-          <Search className="h-3.5 w-3.5 shrink-0 text-[#999]" />
+          <MagnifyingGlassIcon size={14} className="shrink-0 text-[#999]" />
           <input
             value={viewSearch}
             onChange={(e) => setViewSearch(e.target.value)}
@@ -375,7 +363,7 @@ export function ViewSidebar({
             onClick={() => setShowOptions((v) => !v)}
             className="rounded p-1 text-[#999] hover:bg-[#f0f0f0] hover:text-[#555]"
           >
-            <Settings className="h-4 w-4" />
+            <CogIcon size={16} />
           </button>
           {showOptions && (
             <OptionsPopup onClose={() => setShowOptions(false)} />
@@ -424,9 +412,9 @@ export function ViewSidebar({
                   }}
                   className="shrink-0 cursor-pointer rounded p-0.5 text-[#999] opacity-0 transition-opacity hover:bg-black/5 group-hover:opacity-100"
                 >
-                  <MoreHorizontal className="h-4 w-4" />
+                  <OverflowIcon size={16} />
                 </span>
-                <GripVertical className="h-4 w-4 shrink-0 text-[#ccc] opacity-0 transition-opacity group-hover:opacity-100" />
+                <DotsSixVerticalIcon size={16} className="shrink-0 text-[#ccc] opacity-0 transition-opacity group-hover:opacity-100" />
               </button>
               {contextMenuViewId === view.id && (
                 <ViewContextMenu onClose={() => setContextMenuViewId(null)} />

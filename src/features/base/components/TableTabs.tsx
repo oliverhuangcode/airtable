@@ -3,7 +3,11 @@
 
 import { useState, useRef, useEffect } from "react";
 import { api } from "~/trpc/react";
-import { Plus, Loader2, ChevronDown, ChevronRight, Search, Check, MoreVertical, Pencil, X, Trash2, Upload, EyeOff, SlidersHorizontal, Copy, Info, Lock } from "lucide-react";
+import {
+  PlusIcon, SpinnerIcon, ChevronDownIcon, ChevronRightIcon, MagnifyingGlassIcon,
+  CheckBoldIcon, DotsThreeVerticalIcon, PencilIcon, XIcon, TrashIcon,
+  UploadIcon, EyeSlashIcon, SlidersIcon, CopyIcon, InfoIcon, LockIcon
+} from "~/components/icons/AirtableIcons";
 import type { TableSummary } from "~/types";
 import { ToolsDropdown } from "./Toolbar";
 
@@ -57,6 +61,7 @@ export function TableTabs({ baseId, tables, activeTableId, onSelectTable }: Prop
 
   const clearData = api.table.clearData.useMutation({
     onSuccess: () => {
+      void utils.record.listAll.invalidate();
       void utils.record.list.invalidate();
       void utils.record.count.invalidate();
       setTableMenu(null);
@@ -149,13 +154,14 @@ export function TableTabs({ baseId, tables, activeTableId, onSelectTable }: Prop
                 >
                   {table.name}
                   {isActive && (
-                    <ChevronDown
-                      className="h-3 w-3 text-[#888]"
+                    <span
                       onClick={(e) => {
                         e.stopPropagation();
                         setTableMenu(tableMenu === table.id ? null : table.id);
                       }}
-                    />
+                    >
+                      <ChevronDownIcon size={12} className="text-[#888]" />
+                    </span>
                   )}
                 </button>
               )}
@@ -169,10 +175,10 @@ export function TableTabs({ baseId, tables, activeTableId, onSelectTable }: Prop
                   <div className="py-1.5">
                     <button className="flex w-full items-center justify-between px-4 py-2 text-left text-[14px] text-[#333] hover:bg-[#f5f5f5]">
                       <span className="flex items-center gap-3">
-                        <Upload className="h-4 w-4 shrink-0 text-[#666]" />
+                        <UploadIcon size={16} className="shrink-0 text-[#666]" />
                         Import data
                       </span>
-                      <ChevronRight className="h-3.5 w-3.5 text-[#999]" />
+                      <ChevronRightIcon size={14} className="text-[#999]" />
                     </button>
                   </div>
 
@@ -188,19 +194,19 @@ export function TableTabs({ baseId, tables, activeTableId, onSelectTable }: Prop
                       }}
                       className="flex w-full items-center gap-3 px-4 py-2 text-left text-[14px] text-[#333] hover:bg-[#f5f5f5]"
                     >
-                      <Pencil className="h-4 w-4 shrink-0 text-[#666]" />
+                      <PencilIcon size={16} className="shrink-0 text-[#666]" />
                       Rename table
                     </button>
                     <button className="flex w-full items-center gap-3 px-4 py-2 text-left text-[14px] text-[#333] hover:bg-[#f5f5f5]">
-                      <EyeOff className="h-4 w-4 shrink-0 text-[#666]" />
+                      <EyeSlashIcon size={16} className="shrink-0 text-[#666]" />
                       Hide table
                     </button>
                     <button className="flex w-full items-center gap-3 px-4 py-2 text-left text-[14px] text-[#333] hover:bg-[#f5f5f5]">
-                      <SlidersHorizontal className="h-4 w-4 shrink-0 text-[#666]" />
+                      <SlidersIcon size={16} className="shrink-0 text-[#666]" />
                       Manage fields
                     </button>
                     <button className="flex w-full items-center gap-3 px-4 py-2 text-left text-[14px] text-[#333] hover:bg-[#f5f5f5]">
-                      <Copy className="h-4 w-4 shrink-0 text-[#666]" />
+                      <CopyIcon size={16} className="shrink-0 text-[#666]" />
                       Duplicate table
                     </button>
                   </div>
@@ -223,11 +229,11 @@ export function TableTabs({ baseId, tables, activeTableId, onSelectTable }: Prop
                   {/* Edit description / permissions */}
                   <div className="py-1.5">
                     <button className="flex w-full items-center gap-3 px-4 py-2 text-left text-[14px] text-[#333] hover:bg-[#f5f5f5]">
-                      <Info className="h-4 w-4 shrink-0 text-[#666]" />
+                      <InfoIcon size={16} className="shrink-0 text-[#666]" />
                       Edit table description
                     </button>
                     <button className="flex w-full items-center gap-3 px-4 py-2 text-left text-[14px] text-[#333] hover:bg-[#f5f5f5]">
-                      <Lock className="h-4 w-4 shrink-0 text-[#666]" />
+                      <LockIcon size={16} className="shrink-0 text-[#666]" />
                       Edit table permissions
                     </button>
                   </div>
@@ -244,7 +250,7 @@ export function TableTabs({ baseId, tables, activeTableId, onSelectTable }: Prop
                       }}
                       className="flex w-full items-center gap-3 px-4 py-2 text-left text-[14px] text-[#333] hover:bg-[#f5f5f5]"
                     >
-                      <X className="h-4 w-4 shrink-0 text-[#666]" />
+                      <XIcon size={16} className="shrink-0 text-[#666]" />
                       Clear data
                     </button>
                     <button
@@ -260,7 +266,7 @@ export function TableTabs({ baseId, tables, activeTableId, onSelectTable }: Prop
                       }}
                       className="flex w-full items-center gap-3 px-4 py-2 text-left text-[14px] text-[#999] hover:bg-[#f5f5f5]"
                     >
-                      <Trash2 className="h-4 w-4 shrink-0" />
+                      <TrashIcon size={16} className="shrink-0" />
                       Delete table
                     </button>
                   </div>
@@ -276,7 +282,7 @@ export function TableTabs({ baseId, tables, activeTableId, onSelectTable }: Prop
             onClick={() => { setShowDropdown((v) => !v); setDropdownSearch(""); }}
             className="flex items-center rounded-t px-2 py-1.5 text-[#888] hover:bg-[#eee] hover:text-[#666]"
           >
-            <ChevronDown className="h-3.5 w-3.5" />
+            <ChevronDownIcon size={14} />
           </button>
 
           {/* Dropdown */}
@@ -284,7 +290,7 @@ export function TableTabs({ baseId, tables, activeTableId, onSelectTable }: Prop
             <div className="absolute left-0 top-full z-30 mt-0.5 w-[320px] rounded-lg border border-[#ddd] bg-white shadow-[0_4px_16px_rgba(0,0,0,0.12)]">
               {/* Search */}
               <div className="flex items-center gap-2 border-b border-[#eee] px-3 py-2.5">
-                <Search className="h-4 w-4 shrink-0 text-[#999]" />
+                <MagnifyingGlassIcon size={16} className="shrink-0 text-[#999]" />
                 <input
                   value={dropdownSearch}
                   onChange={(e) => setDropdownSearch(e.target.value)}
@@ -311,7 +317,7 @@ export function TableTabs({ baseId, tables, activeTableId, onSelectTable }: Prop
                       }`}
                     >
                       {isActive ? (
-                        <Check className="h-4 w-4 shrink-0 text-[#333]" />
+                        <CheckBoldIcon size={16} className="shrink-0 text-[#333]" />
                       ) : (
                         <span className="h-4 w-4 shrink-0" />
                       )}
@@ -319,7 +325,7 @@ export function TableTabs({ baseId, tables, activeTableId, onSelectTable }: Prop
                         {table.name}
                       </span>
                       {isActive && (
-                        <MoreVertical className="h-4 w-4 shrink-0 text-[#999]" />
+                        <DotsThreeVerticalIcon size={16} className="shrink-0 text-[#999]" />
                       )}
                     </button>
                   );
@@ -336,10 +342,10 @@ export function TableTabs({ baseId, tables, activeTableId, onSelectTable }: Prop
                   className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-[#f5f5f5]"
                 >
                   <div className="flex items-center gap-2">
-                    <Plus className="h-4 w-4 shrink-0 text-[#666]" />
+                    <PlusIcon size={16} className="shrink-0 text-[#666]" />
                     <span className="text-[14px] text-[#333]">Add table</span>
                   </div>
-                  <ChevronRight className="h-4 w-4 text-[#999]" />
+                  <ChevronRightIcon size={16} className="text-[#999]" />
                 </button>
               </div>
             </div>
@@ -366,7 +372,7 @@ export function TableTabs({ baseId, tables, activeTableId, onSelectTable }: Prop
               className="rounded bg-[#2d7ff9] px-2 py-0.5 text-[12px] text-white disabled:opacity-50"
             >
               {createTable.isPending ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <SpinnerIcon size={12} />
               ) : (
                 "Add"
               )}
@@ -377,7 +383,7 @@ export function TableTabs({ baseId, tables, activeTableId, onSelectTable }: Prop
             onClick={() => setIsAdding(true)}
             className="flex items-center gap-1 rounded-t px-2.5 py-1.5 text-black/65 transition-colors hover:bg-[#c9f0f7] hover:text-[#1d1f25]"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <PlusIcon size={14} />
             <span className="text-[13px]">Add or import</span>
           </button>
         )}
@@ -390,7 +396,7 @@ export function TableTabs({ baseId, tables, activeTableId, onSelectTable }: Prop
           className="flex items-center gap-0.5 px-2 text-[13px] text-black/65 transition-colors hover:text-[#1d1f25]"
         >
           <span>Tools</span>
-          <ChevronDown className="h-3 w-3" />
+          <ChevronDownIcon size={12} />
         </button>
         {showTools && (
           <ToolsDropdown onClose={() => setShowTools(false)} />

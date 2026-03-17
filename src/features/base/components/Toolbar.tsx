@@ -2,10 +2,15 @@
 
 import { useState, useEffect, useRef } from "react";
 import {
-  Search, EyeOff, ArrowUpDown, X, Share2, ChevronUp, ChevronDown, Loader2, Menu,
+  X, ChevronUp, ChevronDown, Loader2,
   ChevronRight, Users, Pencil, Info, Copy, Download, Printer, Trash2, HelpCircle,
   Link, Zap, Code2, FileText, Wrench,
 } from "lucide-react";
+import {
+  EyeSlashIcon, FunnelSimpleIcon, GroupIcon as AirtableGroupIcon, ArrowsDownUpIcon,
+  PaintBucketIcon, RowHeightSmallIcon, ArrowsOutSimpleIcon, MagnifyingGlassIcon,
+  ChevronDownIcon, ListIcon as AirtableListIcon, GridFeatureIcon,
+} from "~/components/icons/AirtableIcons";
 import type { FieldSummary, Filter, Sort } from "~/types";
 import { FilterPanel } from "./FilterPanel";
 import { SortPanel } from "./SortPanel";
@@ -28,42 +33,20 @@ interface Props {
   onToggleSidebar:      () => void;
 }
 
-// Airtable-style filter icon (horizontal lines with dots)
 function FilterIcon({ className }: { className?: string }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={className}>
-      <path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
+  return <FunnelSimpleIcon size={16} className={className} />;
 }
 
-// Airtable-style group icon
-function GroupIcon({ className }: { className?: string }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={className}>
-      <rect x="2" y="2" width="12" height="5" rx="1" stroke="currentColor" strokeWidth="1.3" />
-      <rect x="2" y="9" width="12" height="5" rx="1" stroke="currentColor" strokeWidth="1.3" />
-    </svg>
-  );
+function GroupIconLocal({ className }: { className?: string }) {
+  return <AirtableGroupIcon size={16} className={className} />;
 }
 
-// Airtable-style color/paint icon
 function ColorIcon({ className }: { className?: string }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={className}>
-      <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.3" />
-      <circle cx="8" cy="8" r="2" fill="currentColor" />
-    </svg>
-  );
+  return <PaintBucketIcon size={16} className={className} />;
 }
 
-// Airtable-style row height icon (horizontal lines)
 function RowHeightIcon({ className }: { className?: string }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className={className}>
-      <path d="M2 3h12M2 6.5h12M2 10h12M2 13.5h12" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  );
+  return <RowHeightSmallIcon size={16} className={className} />;
 }
 
 /* ── Row height option icons ─────────────────────────── */
@@ -482,20 +465,15 @@ export function Toolbar({
             onClick={onToggleSidebar}
             className="rounded p-1.5 text-[#666] transition-colors hover:bg-[#f0f0f0]"
           >
-            <Menu className="h-4 w-4" />
+            <AirtableListIcon size={16} />
           </button>
           <button
             onClick={() => toggle("gridView")}
             className="flex items-center gap-1.5 rounded px-2 py-1 hover:bg-[#f0f0f0]"
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
-              <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="0.5" fill="#2d7ff9" />
-              <rect x="9" y="1.5" width="5.5" height="5.5" rx="0.5" fill="#2d7ff9" />
-              <rect x="1.5" y="9" width="5.5" height="5.5" rx="0.5" fill="#2d7ff9" />
-              <rect x="9" y="9" width="5.5" height="5.5" rx="0.5" fill="#2d7ff9" />
-            </svg>
+            <GridFeatureIcon size={16} fill="rgb(22, 110, 225)" className="shrink-0" />
             <span className="text-[13px] font-normal text-[#1d1f25]">Grid view</span>
-            <ChevronDown className="h-3 w-3 text-[#888]" />
+            <ChevronDownIcon size={12} className="text-[#888]" />
           </button>
           {openPanel === "gridView" && (
             <GridViewMenu onClose={() => setOpenPanel(null)} />
@@ -510,7 +488,7 @@ export function Toolbar({
           {/* Hide fields */}
           <div className="relative">
             <ToolbarButton
-              icon={<EyeOff className="h-3.5 w-3.5" />}
+              icon={<EyeSlashIcon size={14} />}
               label="Hide fields"
               active={openPanel === "hide"}
               badge={hiddenFieldIds.length > 0 ? hiddenFieldIds.length : undefined}
@@ -538,7 +516,7 @@ export function Toolbar({
           {/* Group */}
           <div className="relative">
             <ToolbarButton
-              icon={<GroupIcon className="h-3.5 w-3.5" />}
+              icon={<GroupIconLocal className="h-3.5 w-3.5" />}
               label="Group"
               active={openPanel === "group"}
               onClick={() => toggle("group")}
@@ -551,7 +529,7 @@ export function Toolbar({
           {/* Sort */}
           <div className="relative">
             <ToolbarButton
-              icon={<ArrowUpDown className="h-3.5 w-3.5" />}
+              icon={<ArrowsDownUpIcon size={14} />}
               label="Sort"
               active={openPanel === "sort"}
               badge={sorts.length > 0 ? sorts.length : undefined}
@@ -593,7 +571,7 @@ export function Toolbar({
           {/* Share and sync */}
           <div className="relative">
             <ToolbarButton
-              icon={<Share2 className="h-3.5 w-3.5" />}
+              icon={<ArrowsOutSimpleIcon size={14} />}
               label="Share and sync"
               active={openPanel === "shareSync"}
               onClick={() => toggle("shareSync")}
@@ -611,7 +589,7 @@ export function Toolbar({
             searchOpen ? "bg-[#d0e5ff] text-[#2d7ff9]" : "text-[#666] hover:bg-[#f0f0f0]"
           }`}
         >
-          <Search className="h-4 w-4" />
+          <MagnifyingGlassIcon size={16} />
         </button>
       </div>
 

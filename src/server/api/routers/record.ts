@@ -82,7 +82,7 @@ function buildWhereSQL(
     conditions.push(Prisma.sql`"Record"."order" > ${cursor}`);
   }
   if (search) {
-    conditions.push(Prisma.sql`"Record"."data"::text ILIKE ${"%" + search + "%"}`);
+    conditions.push(Prisma.sql`EXISTS (SELECT 1 FROM jsonb_each_text("Record"."data") AS kv WHERE kv.value ILIKE ${search + "%"})`);
   }
   conditions.push(...buildFilterConditions(filters));
   return conditions.reduce(
@@ -161,24 +161,22 @@ export const recordRouter = createTRPCRouter({
       const whereSQL = buildWhereSQL(input.tableId, input.filters, input.search);
       const orderSQL = buildOrderSQL(input.sorts);
 
-      const PAGE_SIZE = 25000;
+      const PAGE_SIZE = 50000;
 
       type SlimRow = { id: string; order: number; data: unknown };
 
-      // Fast estimate via reltuples to determine speculative page count
-      const estResult = await ctx.db.$queryRaw<[{ est: number }]>(Prisma.sql`
-        SELECT GREATEST(reltuples, 0)::int as est
-        FROM pg_class WHERE relname = 'Record'
+      // Get count first to know exact page count
+      const countResult = await ctx.db.$queryRaw<[{ count: bigint }]>(Prisma.sql`
+        SELECT COUNT(*)::bigint as count FROM "Record" WHERE ${whereSQL}
       `);
-      const estimate = estResult[0]?.est ?? 0;
-      const specPages = Math.max(1, Math.ceil(estimate / PAGE_SIZE));
+      const total = Number(countResult[0]?.count ?? 0);
+      if (total === 0) return { records: [], total: 0 };
 
-      // Fire count + ALL speculative pages in a single Promise.all
-      const allPromises = [
-        ctx.db.$queryRaw<[{ count: bigint }]>(Prisma.sql`
-          SELECT COUNT(*)::bigint as count FROM "Record" WHERE ${whereSQL}
-        `),
-        ...Array.from({ length: specPages }, (_, i) =>
+      const pageCount = Math.ceil(total / PAGE_SIZE);
+
+      // Fetch all pages in parallel
+      const pages = await Promise.all(
+        Array.from({ length: pageCount }, (_, i) =>
           ctx.db.$queryRaw<SlimRow[]>(Prisma.sql`
             SELECT "Record"."id", "Record"."order", "Record"."data"
             FROM   "Record"
@@ -188,48 +186,26 @@ export const recordRouter = createTRPCRouter({
             OFFSET ${Prisma.raw(String(i * PAGE_SIZE))}
           `)
         ),
-      ];
+      );
 
-      const results = await Promise.all(allPromises);
-      const total = Number((results[0] as [{ count: bigint }])[0]?.count ?? 0);
-      if (total === 0) return { records: [], total: 0 };
-
-      // Collect only pages we actually need
-      const actualPages = Math.ceil(total / PAGE_SIZE);
-      let allRaw: SlimRow[] = [];
-      for (let i = 0; i < actualPages && i + 1 < results.length; i++) {
-        allRaw = allRaw.concat(results[i + 1] as SlimRow[]);
-      }
-
-      // If estimate was too low, fetch remaining pages
-      if (actualPages > specPages) {
-        const extra = await Promise.all(
-          Array.from({ length: actualPages - specPages }, (_, i) =>
-            ctx.db.$queryRaw<SlimRow[]>(Prisma.sql`
-              SELECT "Record"."id", "Record"."order", "Record"."data"
-              FROM   "Record"
-              WHERE  ${whereSQL}
-              ORDER BY ${Prisma.raw(orderSQL)}
-              LIMIT  ${Prisma.raw(String(PAGE_SIZE))}
-              OFFSET ${Prisma.raw(String((specPages + i) * PAGE_SIZE))}
-            `)
-          )
-        );
-        for (const page of extra) allRaw = allRaw.concat(page);
-      }
-
-      // Skip Zod parsing — raw data is trusted from our own DB.
-      // Use shared Date to avoid 100k allocations (frontend doesn't display these).
+      // Pre-allocate single array, avoid concat/spread copies
       const now = new Date();
       const tid = input.tableId;
-      const records = allRaw.map((r) => ({
-        id:        r.id,
-        tableId:   tid,
-        order:     r.order,
-        data:      (r.data ?? {}) as Record<string, string | number | null>,
-        createdAt: now,
-        updatedAt: now,
-      }));
+      const records = new Array(total);
+      let idx = 0;
+      for (const page of pages) {
+        for (const r of page) {
+          records[idx++] = {
+            id:        r.id,
+            tableId:   tid,
+            order:     r.order,
+            data:      (r.data ?? {}) as Record<string, string | number | null>,
+            createdAt: now,
+            updatedAt: now,
+          };
+        }
+      }
+      records.length = idx; // trim if total was slightly off
 
       return { records, total };
     }),
@@ -290,9 +266,7 @@ export const recordRouter = createTRPCRouter({
     .input(RecordBulkCreateInputSchema)
     .output(z.object({ created: z.number() }))
     .mutation(async ({ ctx, input }) => {
-      const table = await ctx.db.table.findUnique({
-        where: { id: input.tableId }, include: { fields: true },
-      });
+      const table = await ctx.db.table.findUnique({ where: { id: input.tableId } });
       if (!table) throw new TRPCError({ code: "NOT_FOUND", message: "Table not found" });
 
       const last = await ctx.db.record.findFirst({
@@ -300,64 +274,18 @@ export const recordRouter = createTRPCRouter({
       });
       const startOrder = (last?.order ?? -1) + 1;
 
-      // Build a SQL expression that generates a random JSONB blob for each row
-      // based on actual field definitions (names/types).
-      const jsonParts = table.fields.map((f) => {
-        const key = f.id;
-        if (f.type === "NUMBER") {
-          return `'${key}', round((random() * 9999 + 1)::numeric, 2)`;
-        }
-        // Text fields — use field name to pick contextual sample arrays
-        const name = f.name.toLowerCase();
-        let arrayExpr: string;
-        if (name.includes("name")) {
-          arrayExpr = `(ARRAY['Alice Johnson','Bob Smith','Carol Williams','David Brown','Eva Martinez','Frank Wilson','Grace Lee','Henry Taylor','Iris Anderson','Jack Thomas','Karen White','Leo Harris','Maya Clark','Noah Lewis','Olivia Robinson','Peter Walker','Quinn Hall','Rachel Young','Sam King','Tina Wright','Uma Scott','Victor Adams','Wendy Baker','Xavier Nelson','Yuki Hill','Zara Green'])[floor(random()*26+1)::int]`;
-        } else if (name.includes("email")) {
-          arrayExpr = `concat((ARRAY['alice','bob','carol','david','eva','frank','grace','henry','iris','jack','karen','leo','maya','noah','olivia','peter','quinn','rachel','sam','tina'])[floor(random()*20+1)::int], floor(random()*9999+1)::int::text, (ARRAY['@gmail.com','@yahoo.com','@outlook.com','@company.com','@example.com'])[floor(random()*5+1)::int])`;
-        } else if (name.includes("company")) {
-          arrayExpr = `(ARRAY['Acme Corp','Globex','Initech','Hooli','Pied Piper','Soylent','Umbrella','Wayne Enterprises','Stark Industries','Cyberdyne','Aperture Science','Wonka Industries','Dunder Mifflin','Sterling Cooper','Prestige Worldwide','Vandelay Industries','Bluth Company','InGen','Tyrell Corp','Massive Dynamic'])[floor(random()*20+1)::int]`;
-        } else if (name.includes("phone")) {
-          arrayExpr = `concat('(', floor(random()*900+100)::int::text, ') ', floor(random()*900+100)::int::text, '-', floor(random()*9000+1000)::int::text)`;
-        } else if (name.includes("status")) {
-          arrayExpr = `(ARRAY['Active','Inactive','Pending'])[floor(random()*3+1)::int]`;
-        } else if (name.includes("note")) {
-          arrayExpr = `(ARRAY['Follow up next week','Urgent request pending','Meeting scheduled','Awaiting approval','Review completed','Needs attention','On track','Delayed delivery','Budget approved','Contract signed','In progress','Waiting for feedback','Escalated to manager','Priority task','Draft submitted','Final review','Shipped today','Customer satisfied','Issue resolved','Pending verification'])[floor(random()*20+1)::int]`;
-        } else {
-          arrayExpr = `(ARRAY['alpha','bravo','charlie','delta','echo','foxtrot','golf','hotel','india','juliet','kilo','lima','mike','november','oscar','papa','quebec','romeo','sierra','tango'])[floor(random()*20+1)::int]`;
-        }
-        return `'${key}', ${arrayExpr}`;
-      });
-
-      const jsonBuildExpr = `jsonb_build_object(${jsonParts.join(", ")})`;
-
-      // Drop GIN index before bulk insert for massive speedup
-      await ctx.db.$executeRawUnsafe(
-        `DROP INDEX IF EXISTS "Record_data_idx"`
-      );
-
-      // Use interactive transaction: defer unique constraint + single INSERT...SELECT
-      const count = input.count;
-      await ctx.db.$transaction(async (tx) => {
-        await tx.$executeRawUnsafe(
-          `SET CONSTRAINTS "Record_tableId_order_key" DEFERRED`
-        );
-        await tx.$executeRawUnsafe(`
-          INSERT INTO "Record" ("id", "tableId", "order", "data", "createdAt", "updatedAt")
-          SELECT
-            gen_random_uuid(),
-            '${table.id}',
-            ${startOrder} + gs.i,
-            ${jsonBuildExpr},
-            NOW(),
-            NOW()
-          FROM generate_series(0, ${count - 1}) AS gs(i)
-        `);
-      }, { timeout: 120000 });
-
-      // Recreate GIN index (non-concurrently since we need it done before returning)
-      await ctx.db.$executeRawUnsafe(
-        `CREATE INDEX IF NOT EXISTS "Record_data_idx" ON "Record" USING gin ("data")`
-      );
+      // Single INSERT...SELECT with generate_series — empty rows, no faker overhead
+      await ctx.db.$executeRaw`
+        INSERT INTO "Record" ("id", "tableId", "order", "data", "createdAt", "updatedAt")
+        SELECT
+          gen_random_uuid()::text,
+          ${table.id},
+          ${startOrder} + gs.i,
+          '{}'::jsonb,
+          NOW(),
+          NOW()
+        FROM generate_series(0, ${input.count - 1}) AS gs(i)
+      `;
 
       return { created: input.count };
     }),

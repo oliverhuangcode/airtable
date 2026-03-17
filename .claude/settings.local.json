@@ -20,7 +20,9 @@
       "mcp__playwright__browser_evaluate",
       "mcp__playwright__browser_tabs",
       "Bash(npx dotenv-cli:*)",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "Bash(grep:*)",
+      "Bash(npx next:*)"
     ]
   }
 }

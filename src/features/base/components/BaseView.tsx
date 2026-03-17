@@ -8,10 +8,11 @@ import { TableGrid } from "./TableGrid";
 import { TableTabs } from "./TableTabs";
 import { Toolbar } from "./Toolbar";
 import { ViewSidebar } from "./ViewSidebar";
+import { Loader2, AlertCircle, ChevronRight, Star, MoreHorizontal, X, Trash2 } from "lucide-react";
 import {
-  Loader2, AlertCircle, ChevronDown, ChevronRight, Clock, ExternalLink, Link2, HelpCircle, Bell,
-  Undo2, Redo2, Trash2, List, Star, MoreHorizontal, X,
-} from "lucide-react";
+  ChevronDownIcon, ClockCounterClockwiseIcon, ArrowSquareOutIcon, LinkIcon,
+  QuestionIcon, BellIcon, ListIcon, ArrowUUpLeftIcon,
+} from "~/components/icons/AirtableIcons";
 import type { Filter, Sort, FieldSummary } from "~/types";
 
 interface Props {
@@ -24,21 +25,53 @@ function parseJSON<T>(str: string | null, fallback: T): T {
   catch { return fallback; }
 }
 
-// Airtable logo icon
-function AirtableLogo() {
+// Exact Airtable 3D logo icon
+function AirtableHomeIcon() {
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-      <path d="M9.286 1.6a1.5 1.5 0 0 1 1.428 0l6.5 3.5a1.5 1.5 0 0 1 .786 1.32v7.16a1.5 1.5 0 0 1-.786 1.32l-6.5 3.5a1.5 1.5 0 0 1-1.428 0l-6.5-3.5A1.5 1.5 0 0 1 2 12.58V5.42a1.5 1.5 0 0 1 .786-1.32l6.5-3.5z" fill="#FCB400"/>
+    <svg width="24" height="20.4" viewBox="0 0 200 170" xmlns="http://www.w3.org/2000/svg" style={{ shapeRendering: 'geometricPrecision' }}>
+      <g>
+        <path fill="currentColor" d="M90.0389,12.3675 L24.0799,39.6605 C20.4119,41.1785 20.4499,46.3885 24.1409,47.8515 L90.3759,74.1175 C96.1959,76.4255 102.6769,76.4255 108.4959,74.1175 L174.7319,47.8515 C178.4219,46.3885 178.4609,41.1785 174.7919,39.6605 L108.8339,12.3675 C102.8159,9.8775 96.0559,9.8775 90.0389,12.3675" />
+        <path fill="currentColor" d="M105.3122,88.4608 L105.3122,154.0768 C105.3122,157.1978 108.4592,159.3348 111.3602,158.1848 L185.1662,129.5368 C186.8512,128.8688 187.9562,127.2408 187.9562,125.4288 L187.9562,59.8128 C187.9562,56.6918 184.8092,54.5548 181.9082,55.7048 L108.1022,84.3528 C106.4182,85.0208 105.3122,86.6488 105.3122,88.4608" />
+        <path fill="currentColor" d="M88.0781,91.8464 L66.1741,102.4224 L63.9501,103.4974 L17.7121,125.6524 C14.7811,127.0664 11.0401,124.9304 11.0401,121.6744 L11.0401,60.0884 C11.0401,58.9104 11.6441,57.8934 12.4541,57.1274 C12.7921,56.7884 13.1751,56.5094 13.5731,56.2884 C14.6781,55.6254 16.2541,55.4484 17.5941,55.9784 L87.7101,83.7594 C91.2741,85.1734 91.5541,90.1674 88.0781,91.8464" />
+      </g>
     </svg>
   );
 }
 
-// Airtable home icon (the small arrow/chevron icon in sidebar)
-function HomeIcon() {
+// Exact Airtable "Omni" ring icon — static state
+// In static: inner ring bits scale=0 (hidden), middle ring rotated 16.36° bits opacity 0.4 translated 16px,
+// outer ring rotated 32.73° bits opacity 1, eyes scale(1,0) (hidden)
+function AirtableRingIcon() {
+  const bitPath = "M0 7.68C0 4.99175 2.38419e-07 3.64762 0.523169 2.62085C0.983361 1.71767 1.71767 0.983361 2.62085 0.523169C3.64762 0 4.99175 0 7.68 0H8.32C11.0083 0 12.3524 0 13.3792 0.523169C14.2823 0.983361 15.0166 1.71767 15.4768 2.62085C16 3.64762 16 4.99175 16 7.68V8.32C16 11.0083 16 12.3524 15.4768 13.3792C15.0166 14.2823 14.2823 15.0166 13.3792 15.4768C12.3524 16 11.0083 16 8.32 16H7.68C4.99175 16 3.64762 16 2.62085 15.4768C1.71767 15.0166 0.983361 14.2823 0.523169 13.3792C2.38419e-07 12.3524 0 11.0083 0 8.32V7.68Z";
+  const angles = [0, 32.72727272727273, 65.45454545454545, 98.18181818181819, 130.9090909090909, 163.63636363636363, 196.36363636363637, 229.0909090909091, 261.8181818181818, 294.54545454545456, 327.27272727272725];
+
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-[#666]">
-      <path d="M3 9.5L12 4l9 5.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-    </svg>
+    <div className="flex h-7 w-7 items-center justify-center" style={{ backgroundColor: 'transparent' }}>
+      <svg height="36" width="36" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style={{ color: '#1d1f25' }}>
+        <g transform="scale(0.9090909090909091)" style={{ transformOrigin: 'center center' }}>
+          {/* Middle ring: rotate 16.36°, bits opacity 0.4, translate 0 16px */}
+          <g style={{ transformOrigin: 'center center', rotate: '16.3636deg' }}>
+            {angles.map((angle) => (
+              <g key={`m${angle}`} style={{ transformOrigin: 'center center' }} transform={`rotate(${angle})`}>
+                <g transform="translate(72, 0)">
+                  <path d={bitPath} fill="currentColor" opacity={0.4} style={{ transformOrigin: '8px 8px', translate: '0px 16px' }} />
+                </g>
+              </g>
+            ))}
+          </g>
+          {/* Outer ring: rotate 32.73°, bits opacity 1 */}
+          <g style={{ transformOrigin: 'center center', rotate: '32.7273deg' }}>
+            {angles.map((angle) => (
+              <g key={`o${angle}`} style={{ transformOrigin: 'center center' }} transform={`rotate(${angle})`}>
+                <g transform="translate(72, 0)">
+                  <path d={bitPath} fill="currentColor" opacity={1} style={{ transformOrigin: '8px 8px' }} />
+                </g>
+              </g>
+            ))}
+          </g>
+        </g>
+      </svg>
+    </div>
   );
 }
 
@@ -51,23 +84,23 @@ function HistoryPanel({ onClose }: { onClose: () => void }) {
         <div className="px-4 py-2.5 text-[14px] font-semibold text-[#1d1f25]">History</div>
         <div className="mx-3 border-t border-[#e8e8e8]" />
         <button className="flex w-full items-center gap-3 px-4 py-2.5 text-[14px] text-[#1d1f25] hover:bg-[#f5f5f5]">
-          <Undo2 className="h-[18px] w-[18px] text-[#666]" />
+          <ArrowUUpLeftIcon size={16} className="text-[#666]" />
           <span className="flex-1">Undo</span>
           <span className="text-[12px] text-[#999]">&#8984;Z</span>
         </button>
         <button className="flex w-full items-center gap-3 px-4 py-2.5 text-[14px] text-[#1d1f25] hover:bg-[#f5f5f5]">
-          <Redo2 className="h-[18px] w-[18px] text-[#666]" />
+          <ArrowUUpLeftIcon size={16} className="text-[#666]" style={{ transform: 'scaleX(-1)' }} />
           <span className="flex-1">Redo</span>
           <span className="text-[12px] text-[#999]">&#8984;&#8679;Z</span>
         </button>
         <div className="mx-3 border-t border-[#e8e8e8]" />
         <button className="flex w-full items-center gap-3 px-4 py-2.5 text-[14px] text-[#1d1f25] hover:bg-[#f5f5f5]">
-          <Clock className="h-[18px] w-[18px] text-[#666]" />
+          <ClockCounterClockwiseIcon size={16} className="text-[#666]" />
           <span className="flex-1">Snapshots</span>
           <ChevronRight className="h-4 w-4 text-[#999]" />
         </button>
         <button className="flex w-full items-center gap-3 px-4 py-2.5 text-[14px] text-[#1d1f25] hover:bg-[#f5f5f5]">
-          <List className="h-[18px] w-[18px] text-[#666]" />
+          <ListIcon size={16} className="text-[#666]" />
           <span className="flex-1">Record revision history</span>
           <ChevronRight className="h-4 w-4 text-[#999]" />
         </button>
@@ -99,7 +132,7 @@ function InviteLinkPopup({ onClose }: { onClose: () => void }) {
           </span>
         </div>
         <button className="mb-3 flex w-full items-center justify-center gap-2 rounded-md bg-[#1d1f25] px-4 py-2 text-[13px] font-medium text-white hover:bg-[#333]">
-          <Link2 className="h-4 w-4" />
+          <LinkIcon size={16} />
           Copy link
         </button>
         <p className="text-[12px] text-[#888]">
@@ -144,7 +177,7 @@ function BaseInfoPanel({ baseName, onClose }: { baseName: string; onClose: () =>
           className="flex w-full items-center gap-2 px-4 py-2.5 text-[14px] text-[#1d1f25] hover:bg-[#f5f5f5]"
         >
           {guideOpen ? (
-            <ChevronDown className="h-4 w-4 text-[#999]" />
+            <ChevronDownIcon size={16} className="text-[#999]" />
           ) : (
             <ChevronRight className="h-4 w-4 text-[#999]" />
           )}
@@ -279,21 +312,21 @@ export function BaseView({ baseId }: Props) {
       {/* Left icon rail */}
       <div className="flex w-[56px] px-2 py-4 shrink-0 flex-col items-center justify-between border-r border-black/10 bg-white py-2">
         {/* Top icons */}
-        <div className="flex flex-col items-center gap-1">
-          <button className="flex items-center justify-center rounded p-1.5 hover:bg-[#f0f0f0]">
-            <HomeIcon />
+        <div className="flex flex-col items-center gap-2">
+          <button className="flex items-center justify-center rounded p-1.5 text-[#1d1f25] hover:bg-[#f0f0f0]">
+            <AirtableHomeIcon />
           </button>
           <button className="flex items-center justify-center rounded p-1.5 hover:bg-[#f0f0f0]">
-            <AirtableLogo />
+            <AirtableRingIcon />
           </button>
         </div>
         {/* Bottom: help, notifications, avatar */}
         <div className="flex flex-col items-center gap-2">
           <button className="rounded p-1.5 text-[#888] hover:bg-[#f0f0f0] hover:text-[#555]">
-            <HelpCircle className="h-[18px] w-[18px]" />
+            <QuestionIcon size={16} />
           </button>
           <button className="rounded p-1.5 text-[#888] hover:bg-[#f0f0f0] hover:text-[#555]">
-            <Bell className="h-[18px] w-[18px]" />
+            <BellIcon size={16} />
           </button>
           <div className="flex h-[26px] w-[26px] items-center justify-center rounded-full bg-[#f59e0b] text-[11px] font-semibold text-white">
             O
@@ -306,14 +339,15 @@ export function BaseView({ baseId }: Props) {
         {/* Top nav */}
         <div className="relative flex h-[56px] shrink-0 items-center justify-between border-b border-black/10 bg-white px-3">
           <div className="flex items-center gap-2">
-            {/* Base color icon */}
-            <div className="flex h-5 w-5 items-center justify-center rounded" style={{ backgroundColor: "#18BFFF" }}>
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="white">
-                <rect x="2" y="2" width="5" height="5" rx="0.5" />
-                <rect x="9" y="2" width="5" height="5" rx="0.5" />
-                <rect x="2" y="9" width="5" height="5" rx="0.5" />
-                <rect x="9" y="9" width="5" height="5" rx="0.5" />
-              </svg>
+            {/* Base color icon — Airtable 3D logo on colored background */}
+            <div className="flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-black/10" style={{ width: 32, height: 32, backgroundColor: "#117da2" }}>
+              <svg width="24" height="20.4" viewBox="0 0 200 170" xmlns="http://www.w3.org/2000/svg" style={{ shapeRendering: 'geometricPrecision' }}>
+                  <g>
+                    <path fill="hsla(0, 0%, 100%, 0.95)" d="M90.0389,12.3675 L24.0799,39.6605 C20.4119,41.1785 20.4499,46.3885 24.1409,47.8515 L90.3759,74.1175 C96.1959,76.4255 102.6769,76.4255 108.4959,74.1175 L174.7319,47.8515 C178.4219,46.3885 178.4609,41.1785 174.7919,39.6605 L108.8339,12.3675 C102.8159,9.8775 96.0559,9.8775 90.0389,12.3675" />
+                    <path fill="hsla(0, 0%, 100%, 0.95)" d="M105.3122,88.4608 L105.3122,154.0768 C105.3122,157.1978 108.4592,159.3348 111.3602,158.1848 L185.1662,129.5368 C186.8512,128.8688 187.9562,127.2408 187.9562,125.4288 L187.9562,59.8128 C187.9562,56.6918 184.8092,54.5548 181.9082,55.7048 L108.1022,84.3528 C106.4182,85.0208 105.3122,86.6488 105.3122,88.4608" />
+                    <path fill="hsla(0, 0%, 100%, 0.95)" d="M88.0781,91.8464 L66.1741,102.4224 L63.9501,103.4974 L17.7121,125.6524 C14.7811,127.0664 11.0401,124.9304 11.0401,121.6744 L11.0401,60.0884 C11.0401,58.9104 11.6441,57.8934 12.4541,57.1274 C12.7921,56.7884 13.1751,56.5094 13.5731,56.2884 C14.6781,55.6254 16.2541,55.4484 17.5941,55.9784 L87.7101,83.7594 C91.2741,85.1734 91.5541,90.1674 88.0781,91.8464" />
+                  </g>
+                </svg>
             </div>
             {/* Base name — with dropdown */}
             <div className="relative">
@@ -322,7 +356,7 @@ export function BaseView({ baseId }: Props) {
                 className="flex items-center gap-1 rounded px-1 py-0.5 hover:bg-[#f0f0f0]"
               >
                 <span className="text-[15px] font-semibold text-[#1d1f25]">{base.name}</span>
-                <ChevronDown className="h-3.5 w-3.5 text-[#1d1f25]/50" />
+                <ChevronDownIcon size={14} className="text-[#1d1f25]/50" />
               </button>
               {showBaseInfo && (
                 <BaseInfoPanel baseName={base.name} onClose={() => setShowBaseInfo(false)} />
@@ -358,7 +392,7 @@ export function BaseView({ baseId }: Props) {
                   showHistory ? "bg-[#d0e5ff] text-[#2d7ff9]" : "text-[#1d1f25] hover:bg-black/5"
                 }`}
               >
-                <Clock className="h-4 w-4" />
+                <ClockCounterClockwiseIcon size={16} />
               </button>
               {showHistory && (
                 <HistoryPanel onClose={() => setShowHistory(false)} />
@@ -370,7 +404,7 @@ export function BaseView({ baseId }: Props) {
               Reaching plan limits
             </button>
             <button className="flex items-center gap-1.5 rounded-[6px] bg-white px-2 py-1 text-[13px] font-normal text-[#1d1f25] shadow-[0_0_0_1px_rgba(0,0,0,0.1)] hover:bg-black/5">
-              <ExternalLink className="h-3.5 w-3.5" />
+              <ArrowSquareOutIcon size={14} />
               Launch
             </button>
 
@@ -382,14 +416,14 @@ export function BaseView({ baseId }: Props) {
                   showInviteLink ? "bg-[#d0e5ff] text-[#2d7ff9]" : "text-[#1d1f25] hover:bg-black/5"
                 }`}
               >
-                <Link2 className="h-4 w-4" />
+                <LinkIcon size={16} />
               </button>
               {showInviteLink && (
                 <InviteLinkPopup onClose={() => setShowInviteLink(false)} />
               )}
             </div>
 
-            <button className="rounded-[6px] bg-[#2d7ff9] px-3 py-1 text-[13px] font-medium text-white hover:bg-[#1a6ed8]">
+            <button className="rounded-[6px] bg-[#117da2] px-3 py-1 text-[13px] font-medium text-white hover:bg-[#0e6a8a]">
               Share
             </button>
           </div>
@@ -460,6 +494,18 @@ export function BaseView({ baseId }: Props) {
                 filters={filters}
                 sorts={sorts}
                 searchIndex={searchIndex}
+                onHideField={(fieldId) => {
+                  setHiddenFieldIds((prev) => prev.includes(fieldId) ? prev : [...prev, fieldId]);
+                }}
+                onFilterByField={(fieldId) => {
+                  const field = activeTable.fields.find((f) => f.id === fieldId);
+                  if (!field) return;
+                  const newFilter: Filter = field.type === "NUMBER"
+                    ? { type: "number", fieldId, op: "equals", value: 0 }
+                    : { type: "text", fieldId, op: "equals", value: "" };
+                  const next = [...filters, newFilter];
+                  updateParams({ filters: JSON.stringify(next) });
+                }}
               />
             </div>
           )}

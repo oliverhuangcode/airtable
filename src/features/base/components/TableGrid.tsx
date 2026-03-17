@@ -8,7 +8,10 @@ import { Plus, Loader2 } from "lucide-react";
 import type { FieldSummary, Filter, Sort, Row } from "~/types";
 import { CellEditor } from "./CellEditor";
 import { AddColumnButton } from "./AddColumnButton";
+import { ColumnHeaderMenu } from "./ColumnHeaderMenu";
 
+// eslint-disable-next-line @typescript-eslint/no-empty-function
+const noop = () => {};
 const ROW_HEIGHT      = 32;
 const COL_WIDTH       = 180;
 const INDEX_WIDTH     = 44; // checkbox + row number
@@ -28,6 +31,8 @@ interface Props {
   filters:      Filter[];
   sorts:        Sort[];
   searchIndex?: number;
+  onHideField?:      (fieldId: string) => void;
+  onFilterByField?:  (fieldId: string) => void;
 }
 
 // Field type icon — matches Airtable header icons exactly
@@ -68,7 +73,7 @@ function Checkbox({ checked, onChange }: { checked: boolean; onChange?: () => vo
   );
 }
 
-export function TableGrid({ tableId, fields, allFields: _allFields, search, filters, sorts, searchIndex = 1 }: Props) {
+export function TableGrid({ tableId, fields, allFields: _allFields, search, filters, sorts, searchIndex = 1, onHideField, onFilterByField }: Props) {
   const parentRef             = useRef<HTMLDivElement>(null);
   const [activeCell, setActiveCell]       = useState<ActiveCell | null>(null);
   const [entryMode, setEntryMode]         = useState<"replace" | "append">("replace");
@@ -95,7 +100,7 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
   );
   const total = listAllData?.total ?? 0;
   const allRows: Row[] = useMemo(
-    () => listAllData?.records ?? [],
+    () => (listAllData?.records as Row[] | undefined) ?? [],
     [listAllData],
   );
 
@@ -108,7 +113,7 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
     for (const row of allRows) {
       for (const field of fields) {
         const val = row.data[field.id];
-        if (val != null && String(val).toLowerCase().includes(term)) {
+        if (val != null && String(val).toLowerCase().startsWith(term)) {
           idx++;
           map.set(`${row.id}:${field.id}`, idx);
         }
@@ -245,7 +250,7 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
 
   const bulkCreate = api.record.bulkCreate.useMutation({
     onSuccess: async () => {
-      await utils.record.listAll.invalidate(queryKey);
+      await utils.record.listAll.invalidate();
     },
   });
 
@@ -426,14 +431,15 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
   }
 
   const dataWidth  = INDEX_WIDTH + fields.length * COL_WIDTH;
-  const totalWidth = dataWidth + 52;
+  const addColWidth = 92;
+  const totalWidth = dataWidth + addColWidth;
 
   return (
     <div className="relative flex h-full flex-col overflow-hidden bg-white">
 
       {/* ── Column headers ── */}
       <div
-        className="flex shrink-0 bg-white"
+        className="flex shrink-0"
         style={{ minWidth: "100%" }}
       >
         {/* Checkbox + expand column header */}
@@ -457,7 +463,7 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
         {fields.map((field, colIndex) => (
           <div
             key={field.id}
-            className={`flex shrink-0 cursor-pointer items-center gap-1.5 border-b border-r border-[#d1d1d1] px-3 hover:bg-[#e8e8e8] ${
+            className={`group/header relative flex shrink-0 cursor-pointer items-center gap-1.5 border-b border-r border-[#d1d1d1] px-3 hover:bg-[#e8e8e8] ${
               selectedColumn === field.id ? "bg-[#f1f6ff]" : "bg-white"
             }`}
             style={{ width: COL_WIDTH, height: ROW_HEIGHT }}
@@ -472,17 +478,25 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
             }}
           >
             <FieldTypeIcon type={field.type} />
-            <span className="truncate text-[13px] font-medium text-[#1d1f25]">{field.name}</span>
+            <span className="flex-1 truncate text-[13px] font-medium text-[#1d1f25]">{field.name}</span>
+            <ColumnHeaderMenu
+              field={field}
+              tableId={tableId}
+              onHideField={(id) => onHideField?.(id)}
+              onFilterByField={(id) => onFilterByField?.(id)}
+              onDuplicated={noop}
+              onDeleted={noop}
+            />
           </div>
         ))}
 
         {/* Add column button */}
-        <div className="relative shrink-0 border-b border-[#d1d1d1] bg-white">
+        <div className="relative shrink-0 border-b border-[#d1d1d1]">
           <AddColumnButton tableId={tableId} />
         </div>
 
-        {/* Fill remaining header space — empty, borderless */}
-        <div className="flex-1" style={{ height: ROW_HEIGHT }} />
+        {/* Fill remaining header space — matches empty grid bg */}
+        <div className="flex-1 bg-[#f5f5f5]" style={{ height: ROW_HEIGHT }} />
       </div>
 
       {/* ── Virtualised rows ── */}
