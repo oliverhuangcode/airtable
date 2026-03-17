@@ -9,11 +9,9 @@ import type { FieldSummary, Filter, Sort, Row } from "~/types";
 import { CellEditor } from "./CellEditor";
 import { AddColumnButton } from "./AddColumnButton";
 
-const ROW_HEIGHT      = 36;
+const ROW_HEIGHT      = 32;
 const COL_WIDTH       = 180;
-const INDEX_WIDTH     = 96; // checkbox (32) + row number (64)
-const FETCH_LIMIT     = 5000;
-const FETCH_THRESHOLD = 0.3;
+const INDEX_WIDTH     = 44; // checkbox + row number
 
 interface ActiveCell {
   recordId: string;
@@ -23,12 +21,13 @@ interface ActiveCell {
 }
 
 interface Props {
-  tableId:   string;
-  fields:    FieldSummary[];
-  allFields?: FieldSummary[];
-  search:    string;
-  filters:   Filter[];
-  sorts:     Sort[];
+  tableId:      string;
+  fields:       FieldSummary[];
+  allFields?:   FieldSummary[];
+  search:       string;
+  filters:      Filter[];
+  sorts:        Sort[];
+  searchIndex?: number;
 }
 
 // Field type icon — matches Airtable header icons exactly
@@ -69,11 +68,15 @@ function Checkbox({ checked, onChange }: { checked: boolean; onChange?: () => vo
   );
 }
 
-export function TableGrid({ tableId, fields, allFields: _allFields, search, filters, sorts }: Props) {
+export function TableGrid({ tableId, fields, allFields: _allFields, search, filters, sorts, searchIndex = 1 }: Props) {
   const parentRef             = useRef<HTMLDivElement>(null);
   const [activeCell, setActiveCell]       = useState<ActiveCell | null>(null);
+  const [entryMode, setEntryMode]         = useState<"replace" | "append">("replace");
   const [selectedRows, setSelectedRows]   = useState<Set<string>>(new Set());
+  const [selectedColumn, setSelectedColumn] = useState<string | null>(null);
   const cellRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const tempToRealId = useRef<Map<string, string>>(new Map());
+  const pendingCellUpdates = useRef<{ tempId: string; fieldId: string; value: string | number | null }[]>([]);
 
   const setCellRef = useCallback((recordId: string, fieldId: string, el: HTMLDivElement | null) => {
     const key = `${recordId}:${fieldId}`;
@@ -83,36 +86,36 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
 
   const utils = api.useUtils();
 
-  // ── Count: fetched first, sizes the scrollbar immediately ─────────────────
-  // This is what keeps the scrollbar stable — virtualizer uses `total` not
-  // `allRows.length`, so the scrollbar height never changes as pages load.
-  const { data: countData } = api.record.count.useQuery(
-    { tableId, filters, search },
-    { staleTime: 30_000 },
+  // ── listAll: single tRPC call, server-side parallel fetch ─────────────────
+  // Replaces sequential useInfiniteQuery (20 round-trips) with one call
+  // that fetches all pages in parallel on the server via Promise.all.
+  const { data: listAllData } = api.record.listAll.useQuery(
+    { tableId, filters, sorts, search },
+    { staleTime: 60_000 },
   );
-  const total = countData?.total ?? 0;
-
-  // ── useInfiniteQuery: cursor pagination ───────────────────────────────────
-  const {
-    data,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-    status,
-  } = api.record.list.useInfiniteQuery(
-    { tableId, limit: FETCH_LIMIT, filters, sorts, search },
-    {
-      getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
-      staleTime: 60_000,
-      // Don't start fetching until we have the total count
-      enabled: countData !== undefined,
-    },
-  );
-
+  const total = listAllData?.total ?? 0;
   const allRows: Row[] = useMemo(
-    () => data?.pages.flatMap((p) => p.records) ?? [],
-    [data],
+    () => listAllData?.records ?? [],
+    [listAllData],
   );
+
+  // ── Search match map: cell key → 1-based match index ──────────────────────
+  const searchMatchMap = useMemo(() => {
+    const map = new Map<string, number>();
+    const term = search.trim().toLowerCase();
+    if (!term) return map;
+    let idx = 0;
+    for (const row of allRows) {
+      for (const field of fields) {
+        const val = row.data[field.id];
+        if (val != null && String(val).toLowerCase().includes(term)) {
+          idx++;
+          map.set(`${row.id}:${field.id}`, idx);
+        }
+      }
+    }
+    return map;
+  }, [allRows, fields, search]);
 
   // ── Virtualizer: count = total, never changes ─────────────────────────────
   // Using `total` (from count query) instead of `allRows.length` means:
@@ -130,15 +133,7 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
 
   const virtualItems = rowVirtualizer.getVirtualItems();
 
-  // ── Fetch next page when approaching end of loaded rows ───────────────────
-  const lastItemIndex = virtualItems.at(-1)?.index ?? -1;
-  useEffect(() => {
-    if (lastItemIndex === -1) return;
-    const fetchAt = Math.floor(allRows.length * FETCH_THRESHOLD);
-    if (lastItemIndex >= fetchAt && hasNextPage && !isFetchingNextPage) {
-      void fetchNextPage();
-    }
-  }, [lastItemIndex, allRows.length, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  // No progressive fetching needed — listAll returns all rows in one call.
 
   // ── Focus active cell ─────────────────────────────────────────────────────
   // Focus active cell
@@ -159,54 +154,98 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
     });
   }, [activeCell]);
 
+  const queryKey = { tableId, filters, sorts, search };
+
   // ── Optimistic cell update ────────────────────────────────────────────────
   const updateCell = api.record.updateCell.useMutation({
     onMutate: async ({ recordId, fieldId, value }) => {
-      await utils.record.list.cancel({ tableId });
-      const previousData = utils.record.list.getInfiniteData({
-        tableId, limit: FETCH_LIMIT, filters, sorts, search,
-      });
+      await utils.record.listAll.cancel(queryKey);
+      const previousData = utils.record.listAll.getData(queryKey);
 
-      utils.record.list.setInfiniteData(
-        { tableId, limit: FETCH_LIMIT, filters, sorts, search },
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              records: page.records.map((r: Row) =>
-                r.id === recordId
-                  ? { ...r, data: { ...r.data, [fieldId]: value } }
-                  : r,
-              ),
-            })),
-          };
-        },
-      );
+      utils.record.listAll.setData(queryKey, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          records: old.records.map((r: Row) =>
+            r.id === recordId
+              ? { ...r, data: { ...r.data, [fieldId]: value } }
+              : r,
+          ),
+        };
+      });
       return { previousData };
     },
     onError: (_err, _vars, context) => {
       if (context?.previousData) {
-        utils.record.list.setInfiniteData(
-          { tableId, limit: FETCH_LIMIT, filters, sorts, search },
-          context.previousData,
-        );
+        utils.record.listAll.setData(queryKey, context.previousData);
       }
     },
   });
 
   const createRecord = api.record.create.useMutation({
-    onSuccess: async () => {
-      await utils.record.list.invalidate({ tableId });
-      await utils.record.count.invalidate({ tableId });
+    onMutate: async () => {
+      await utils.record.listAll.cancel(queryKey);
+      const previousData = utils.record.listAll.getData(queryKey);
+
+      const tempId = `temp-${Date.now()}`;
+      const lastRow = allRows[allRows.length - 1];
+      const newOrder = (lastRow?.order ?? -1) + 1;
+      const now = new Date();
+      const tempRow: Row = { id: tempId, tableId, order: newOrder, data: {}, createdAt: now, updatedAt: now };
+
+      utils.record.listAll.setData(queryKey, (old) => {
+        if (!old) return old;
+        return { ...old, records: [...old.records, tempRow], total: old.total + 1 };
+      });
+
+      const firstField = fields[0];
+      if (firstField) {
+        const newRowIndex = total;
+        setActiveCell({ recordId: tempId, fieldId: firstField.id, rowIndex: newRowIndex, colIndex: 0 });
+        requestAnimationFrame(() => {
+          rowVirtualizer.scrollToIndex(newRowIndex, { align: "end" });
+        });
+      }
+
+      return { previousData, tempId };
+    },
+    onSuccess: (newRow, _vars, context) => {
+      if (!context?.tempId) return;
+      tempToRealId.current.set(context.tempId, newRow.id);
+
+      utils.record.listAll.setData(queryKey, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          records: old.records.map((r: Row) =>
+            r.id === context.tempId
+              ? { ...newRow, data: { ...newRow.data, ...r.data } }
+              : r,
+          ),
+        };
+      });
+
+      setActiveCell((prev) =>
+        prev?.recordId === context.tempId ? { ...prev, recordId: newRow.id } : prev,
+      );
+
+      const queued = pendingCellUpdates.current.filter((u) => u.tempId === context.tempId);
+      pendingCellUpdates.current = pendingCellUpdates.current.filter((u) => u.tempId !== context.tempId);
+      for (const u of queued) {
+        updateCell.mutate({ recordId: newRow.id, fieldId: u.fieldId, value: u.value });
+      }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousData) {
+        utils.record.listAll.setData(queryKey, context.previousData);
+      }
+      setActiveCell(null);
     },
   });
 
   const bulkCreate = api.record.bulkCreate.useMutation({
     onSuccess: async () => {
-      await utils.record.list.invalidate({ tableId });
-      await utils.record.count.invalidate({ tableId });
+      await utils.record.listAll.invalidate(queryKey);
     },
   });
 
@@ -218,6 +257,7 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
 
       if (e.key === "Tab") {
         e.preventDefault();
+        setEntryMode("append");
         const next = e.shiftKey
           ? colIndex > 0 ? { r: rowIndex, c: colIndex - 1 } : rowIndex > 0 ? { r: rowIndex - 1, c: maxCol } : null
           : colIndex < maxCol ? { r: rowIndex, c: colIndex + 1 } : rowIndex < maxRow ? { r: rowIndex + 1, c: 0 } : null;
@@ -245,7 +285,7 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
         return;
       }
 
-      if (e.key === "Escape") setActiveCell(null);
+      if (e.key === "Escape") { setActiveCell(null); setSelectedColumn(null); }
     },
     [fields, allRows, total],
   );
@@ -259,7 +299,125 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
     });
   }, []);
 
-  if (!countData || status === "pending") {
+  // ── Drag-to-reorder state ──────────────────────────────────────────────────
+  const [dragRowIndex, setDragRowIndex] = useState<number | null>(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
+
+  const reorderRecord = api.record.reorder.useMutation({
+    onMutate: async ({ recordId, fromOrder, toOrder }) => {
+      await utils.record.listAll.cancel(queryKey);
+      const prev = utils.record.listAll.getData(queryKey);
+
+      utils.record.listAll.setData(queryKey, (old) => {
+        if (!old) return old;
+        const rows = old.records.map((r: Row) => {
+          if (r.id === recordId) return { ...r, order: toOrder };
+          if (fromOrder < toOrder) {
+            if (r.order > fromOrder && r.order <= toOrder)
+              return { ...r, order: r.order - 1 };
+          } else {
+            if (r.order >= toOrder && r.order < fromOrder)
+              return { ...r, order: r.order + 1 };
+          }
+          return r;
+        });
+        rows.sort((a: Row, b: Row) => a.order - b.order);
+        return { ...old, records: rows };
+      });
+
+      return { prev };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.prev) utils.record.listAll.setData(queryKey, context.prev);
+    },
+    onSettled: () => {
+      void utils.record.listAll.invalidate(queryKey);
+    },
+  });
+
+  const handleDragStart = useCallback((e: React.DragEvent, rowIndex: number) => {
+    setDragRowIndex(rowIndex);
+    e.dataTransfer.effectAllowed = "move";
+    const img = new Image();
+    img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+    e.dataTransfer.setDragImage(img, 0, 0);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent, rowIndex: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    if (dragRowIndex === null) return;
+    // Use cursor position within the row to decide above/below
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    let target: number;
+    if (e.clientY < midY) {
+      // Top half → insert above this row
+      target = rowIndex;
+    } else {
+      // Bottom half → insert below this row
+      target = rowIndex + 1;
+    }
+    // Clamp and skip no-ops (dropping right above or below the dragged row)
+    if (target === dragRowIndex || target === dragRowIndex + 1) {
+      setDropTargetIndex(null);
+    } else {
+      setDropTargetIndex(target);
+    }
+  }, [dragRowIndex]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    if (dragRowIndex === null || dropTargetIndex === null) {
+      setDragRowIndex(null);
+      setDropTargetIndex(null);
+      return;
+    }
+    // dropTargetIndex is the insertion point (row index the dragged row will end up at)
+    // If inserting below the drag origin, the effective target is one less
+    // because removing the source shifts everything above the target up.
+    const toIndex = dropTargetIndex > dragRowIndex
+      ? dropTargetIndex - 1
+      : dropTargetIndex;
+
+    if (toIndex === dragRowIndex) {
+      setDragRowIndex(null);
+      setDropTargetIndex(null);
+      return;
+    }
+
+    const fromRecord = allRows[dragRowIndex];
+    const toRecord   = allRows[toIndex];
+    if (fromRecord && toRecord && !reorderRecord.isPending) {
+      reorderRecord.mutate({
+        recordId:  fromRecord.id,
+        tableId,
+        fromOrder: fromRecord.order,
+        toOrder:   toRecord.order,
+      });
+    }
+    setDragRowIndex(null);
+    setDropTargetIndex(null);
+  }, [dragRowIndex, dropTargetIndex, allRows, tableId, reorderRecord]);
+
+  const handleDragEnd = useCallback(() => {
+    setDragRowIndex(null);
+    setDropTargetIndex(null);
+  }, []);
+
+  const handleAddRecord = useCallback(() => {
+    if (!createRecord.isPending) {
+      createRecord.mutate({ tableId });
+    }
+  }, [createRecord, tableId]);
+
+  const handleBulkAdd = useCallback(() => {
+    if (!bulkCreate.isPending) {
+      bulkCreate.mutate({ tableId, count: 100000 });
+    }
+  }, [bulkCreate, tableId]);
+
+  if (!listAllData) {
     return (
       <div className="flex h-full items-center justify-center bg-white">
         <Loader2 className="h-5 w-5 animate-spin text-[#1170cb]" />
@@ -267,59 +425,99 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
     );
   }
 
-  const totalWidth = INDEX_WIDTH + fields.length * COL_WIDTH + 52;
+  const dataWidth  = INDEX_WIDTH + fields.length * COL_WIDTH;
+  const totalWidth = dataWidth + 52;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-white">
+    <div className="relative flex h-full flex-col overflow-hidden bg-white">
 
       {/* ── Column headers ── */}
       <div
-        className="flex shrink-0 border-b border-[#e0e0e0] bg-[#f8f8f8]"
-        style={{ width: totalWidth, minWidth: "100%" }}
+        className="flex shrink-0 bg-white"
+        style={{ minWidth: "100%" }}
       >
         {/* Checkbox + expand column header */}
         <div
-          className="flex shrink-0 items-center justify-end gap-1.5 border-r border-[#e0e0e0] pr-2"
+          className="flex shrink-0 items-center justify-center border-b border-[#d1d1d1] bg-white"
           style={{ width: INDEX_WIDTH, height: ROW_HEIGHT }}
         >
-          <Checkbox checked={selectedRows.size === allRows.length && allRows.length > 0} />
+          <Checkbox
+            checked={selectedRows.size === allRows.length && allRows.length > 0}
+            onChange={() => {
+              if (selectedRows.size === allRows.length) {
+                setSelectedRows(new Set());
+              } else {
+                setSelectedRows(new Set(allRows.map((r) => r.id)));
+              }
+            }}
+          />
         </div>
 
         {/* Field headers */}
-        {fields.map((field) => (
+        {fields.map((field, colIndex) => (
           <div
             key={field.id}
-            className="flex shrink-0 cursor-pointer items-center gap-[6px] border-r border-[#e0e0e0] px-3 hover:bg-[#f0f0f0]"
+            className={`flex shrink-0 cursor-pointer items-center gap-1.5 border-b border-r border-[#d1d1d1] px-3 hover:bg-[#e8e8e8] ${
+              selectedColumn === field.id ? "bg-[#f1f6ff]" : "bg-white"
+            }`}
             style={{ width: COL_WIDTH, height: ROW_HEIGHT }}
+            onClick={() => {
+              setSelectedColumn(field.id);
+              setSelectedRows(new Set());
+              const firstRecord = allRows[0];
+              if (firstRecord) {
+                setEntryMode("replace");
+                setActiveCell({ recordId: firstRecord.id, fieldId: field.id, rowIndex: 0, colIndex });
+              }
+            }}
           >
             <FieldTypeIcon type={field.type} />
-            <span className="truncate text-[13px] font-medium text-[#1f1f1f]">{field.name}</span>
+            <span className="truncate text-[13px] font-medium text-[#1d1f25]">{field.name}</span>
           </div>
         ))}
 
         {/* Add column button */}
-        <div className="relative shrink-0">
+        <div className="relative shrink-0 border-b border-[#d1d1d1] bg-white">
           <AddColumnButton tableId={tableId} />
         </div>
+
+        {/* Fill remaining header space — empty, borderless */}
+        <div className="flex-1" style={{ height: ROW_HEIGHT }} />
       </div>
 
       {/* ── Virtualised rows ── */}
       <div
         ref={parentRef}
-        className="flex-1 overflow-auto"
-        onClick={() => setActiveCell(null)}
+        className="grid-scroll flex-1 overflow-auto bg-[#f5f5f5]"
+        onClick={() => { setActiveCell(null); setSelectedColumn(null); }}
         onKeyDown={(e) => {
           if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) e.preventDefault();
         }}
       >
         <div
           style={{
-            height:   rowVirtualizer.getTotalSize(),
+            height:   rowVirtualizer.getTotalSize() + ROW_HEIGHT,
             width:    totalWidth,
             minWidth: "100%",
             position: "relative",
           }}
         >
+          {/* Drop indicator line */}
+          {dropTargetIndex !== null && dragRowIndex !== null && (
+            <div
+              style={{
+                position: "absolute",
+                top: dropTargetIndex * ROW_HEIGHT - 1,
+                left: 0,
+                right: 0,
+                height: 2,
+                backgroundColor: "#2d7ff9",
+                zIndex: 20,
+                pointerEvents: "none",
+              }}
+            />
+          )}
+
           {virtualItems.map((virtualRow) => {
             const record    = allRows[virtualRow.index];
             const isSelected = record ? selectedRows.has(record.id) : false;
@@ -329,15 +527,15 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
               return (
                 <div
                   key={virtualRow.key}
-                  style={{ position: "absolute", top: virtualRow.start, width: "100%", height: ROW_HEIGHT, display: "flex" }}
-                  className="border-b border-[#e8e8e8]"
+                  style={{ position: "absolute", top: virtualRow.start, width: dataWidth, height: ROW_HEIGHT, display: "flex" }}
+                  className="border-b border-[#dde1e3] bg-white"
                 >
-                  <div className="flex shrink-0 items-center justify-end gap-1.5 border-r border-[#e0e0e0] pr-2"
+                  <div className="flex shrink-0 items-center justify-end gap-1.5 pr-2"
                     style={{ width: INDEX_WIDTH }}>
-                    <span className="text-[12px] text-[#999]">{virtualRow.index + 1}</span>
+                    <span className="text-[12px] text-[#616670]">{virtualRow.index + 1}</span>
                   </div>
                   {fields.map((f) => (
-                    <div key={f.id} className="shrink-0 border-r border-[#e0e0e0]"
+                    <div key={f.id} className="shrink-0 border-r border-[#dde1e3]"
                       style={{ width: COL_WIDTH }} />
                   ))}
                 </div>
@@ -347,48 +545,89 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
             return (
               <div
                 key={virtualRow.key}
-                style={{ position: "absolute", top: virtualRow.start, width: "100%", height: ROW_HEIGHT, display: "flex" }}
-                className={`group border-b border-[#e8e8e8] ${isSelected ? "bg-[#edf4ff]" : "hover:bg-[#f9f9f9]"}`}
+                style={{
+                  position: "absolute",
+                  top: virtualRow.start,
+                  width: dataWidth,
+                  height: ROW_HEIGHT,
+                  display: "flex",
+                  opacity: dragRowIndex === virtualRow.index ? 0.4 : 1,
+                }}
+                className={`group border-b border-[#dde1e3] ${isSelected ? "bg-[#edf4ff]" : "bg-white hover:bg-[#f9f9f9]"}`}
+                onDragOver={(e) => handleDragOver(e, virtualRow.index)}
+                onDrop={handleDrop}
               >
-                {/* Row index + checkbox */}
+                {/* Row index area: drag handle | expand | checkbox */}
                 <div
-                  className="flex shrink-0 items-center justify-end gap-[6px] border-r border-[#e0e0e0] pr-2"
+                  className="relative flex shrink-0 items-center"
                   style={{ width: INDEX_WIDTH, height: ROW_HEIGHT }}
                 >
-                  {/* Row number — hidden on hover/select, replaced by checkbox */}
-                  <span className={`text-[12px] text-[#999] transition-opacity ${isSelected ? "opacity-0 group-hover:opacity-0" : "opacity-100 group-hover:opacity-0"}`}
-                    style={{ position: "absolute", right: 36 }}>
+                  {/* Row number — visible by default, hidden on hover */}
+                  <span className={`absolute inset-0 flex items-center justify-center text-[12px] text-[#616670] transition-opacity ${isSelected ? "opacity-0" : "opacity-100 group-hover:opacity-0"}`}>
                     {virtualRow.index + 1}
                   </span>
-                  {/* Expand icon — only on hover */}
-                  <div className={`absolute right-[18px] transition-opacity ${isSelected || true ? "opacity-0 group-hover:opacity-100" : "opacity-0"}`}>
-                    <svg width="11" height="11" viewBox="0 0 14 14" fill="none" className="text-[#aaa]">
-                      <path d="M2 2h4M2 2v4M12 2h-4M12 2v4M2 12h4M2 12v-4M12 12h-4M12 12v-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                    </svg>
+
+                  {/* Hover controls — shown on hover or when selected */}
+                  <div className={`absolute inset-0 flex items-center justify-center gap-0.5 transition-opacity ${isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+                    {/* Drag handle (6-dot grip) */}
+                    <div
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, virtualRow.index)}
+                      onDragEnd={handleDragEnd}
+                      className="flex cursor-grab items-center rounded p-0.5 text-[#bbb] hover:bg-[#eee] hover:text-[#888] active:cursor-grabbing"
+                    >
+                      <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor">
+                        <circle cx="3" cy="3" r="1.2" />
+                        <circle cx="7" cy="3" r="1.2" />
+                        <circle cx="3" cy="8" r="1.2" />
+                        <circle cx="7" cy="8" r="1.2" />
+                        <circle cx="3" cy="13" r="1.2" />
+                        <circle cx="7" cy="13" r="1.2" />
+                      </svg>
+                    </div>
+
+                    {/* Checkbox */}
+                    <Checkbox
+                      checked={isSelected}
+                      onChange={() => toggleRow(record.id)}
+                    />
+
+                    {/* Expand icon */}
+                    <button className="flex items-center rounded border border-[#ddd] bg-white p-0.5 text-[#aaa] hover:bg-[#f5f5f5] hover:text-[#666]">
+                      <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                        <path d="M4 12l8-8M12 4v5M12 4H7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
                   </div>
-                  <Checkbox
-                    checked={isSelected}
-                    onChange={() => toggleRow(record.id)}
-                  />
                 </div>
 
                 {/* Cells */}
                 {fields.map((field, colIndex) => {
                   const isActive = activeCell?.recordId === record.id && activeCell?.fieldId === field.id;
                   const value    = record.data[field.id] ?? null;
+                  const matchIdx = searchMatchMap.get(`${record.id}:${field.id}`);
+                  const isMatch       = matchIdx !== undefined;
+                  const isActiveMatch = matchIdx === searchIndex;
+                  const isColSelected = selectedColumn === field.id;
 
                   return (
                     <div
                       key={field.id}
                       ref={(el) => setCellRef(record.id, field.id, el)}
-                      className={`relative shrink-0 border-r border-[#e0e0e0] ${
+                      className={`relative shrink-0 border-r border-[#dde1e3] ${
                         isActive
                           ? "z-10 shadow-[inset_0_0_0_2px_#1170cb]"
                           : ""
                       }`}
-                      style={{ width: COL_WIDTH, height: ROW_HEIGHT }}
+                      style={{
+                        width: COL_WIDTH,
+                        height: ROW_HEIGHT,
+                        backgroundColor: isActiveMatch ? "#fdd66a" : isMatch ? "#fff3d4" : isColSelected ? "#f1f6ff" : undefined,
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
+                        setSelectedColumn(null);
+                        setEntryMode("replace");
                         setActiveCell({ recordId: record.id, fieldId: field.id, rowIndex: virtualRow.index, colIndex });
                       }}
                     >
@@ -396,9 +635,31 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
                         value={value}
                         fieldType={field.type}
                         isActive={isActive}
-                        onCommit={(newValue) =>
-                          updateCell.mutate({ recordId: record.id, fieldId: field.id, value: newValue })
-                        }
+                        entryMode={entryMode}
+                        onCommit={(newValue) => {
+                          if (record.id.startsWith("temp-")) {
+                            const realId = tempToRealId.current.get(record.id);
+                            if (realId) {
+                              updateCell.mutate({ recordId: realId, fieldId: field.id, value: newValue });
+                            } else {
+                              // Real ID not yet available — queue for flush in onSuccess
+                              pendingCellUpdates.current.push({ tempId: record.id, fieldId: field.id, value: newValue });
+                              utils.record.listAll.setData(queryKey, (old) => {
+                                if (!old) return old;
+                                return {
+                                  ...old,
+                                  records: old.records.map((r: Row) =>
+                                    r.id === record.id
+                                      ? { ...r, data: { ...r.data, [field.id]: newValue } }
+                                      : r,
+                                  ),
+                                };
+                              });
+                            }
+                          } else {
+                            updateCell.mutate({ recordId: record.id, fieldId: field.id, value: newValue });
+                          }
+                        }}
                         onKeyDown={(e) => handleKeyDown(e, virtualRow.index, colIndex)}
                       />
                     </div>
@@ -407,47 +668,71 @@ export function TableGrid({ tableId, fields, allFields: _allFields, search, filt
               </div>
             );
           })}
+
+          {/* ── Add row — empty row after last data row ── */}
+          <div
+            style={{
+              position: "absolute",
+              top: total * ROW_HEIGHT,
+              width: dataWidth,
+              height: ROW_HEIGHT,
+              display: "flex",
+            }}
+            className="border-b border-[#dde1e3] bg-white"
+          >
+            <div
+              className="flex shrink-0 items-center pl-2"
+              style={{ width: INDEX_WIDTH, height: ROW_HEIGHT }}
+            >
+              <button
+                onClick={handleAddRecord}
+                disabled={createRecord.isPending}
+                className="flex items-center rounded p-1 text-[#888] transition-colors hover:bg-[#f0f0f0] hover:text-[#555]"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            {fields.map((f) => (
+              <div
+                key={f.id}
+                className="shrink-0 border-r border-[#dde1e3]"
+                style={{ width: COL_WIDTH, height: ROW_HEIGHT }}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* ── Footer ── */}
-      <div className="flex shrink-0 items-center justify-between border-t border-[#e0e0e0] bg-[#f8f8f8] px-3 py-0" style={{ height: 36 }}>
-        <div className="flex items-center gap-2">
-          {/* Add row */}
+      {/* ── Floating add overlay (bottom-left, above footer) ── */}
+      <div className="pointer-events-none absolute bottom-8 left-0 z-20 px-3 py-2">
+        <div className="pointer-events-auto flex items-center gap-0 rounded-full border border-black/10 bg-white shadow-sm">
           <button
-            onClick={() => createRecord.mutate({ tableId })}
+            onClick={handleAddRecord}
             disabled={createRecord.isPending}
-            className="flex items-center gap-[5px] rounded px-2 py-1 text-[13px] text-[#555] transition-colors hover:bg-[#ebebeb]"
+            className="flex items-center justify-center rounded-l-full border-r border-black/10 px-2.5 py-1 text-[#1d1f25]/60 transition-colors hover:bg-black/5"
+            title="Add record"
           >
             <Plus className="h-3.5 w-3.5" />
-            <span>Add row</span>
           </button>
-
-          <div className="h-4 w-px bg-[#e0e0e0]" />
-
-          {/* 100k rows button */}
           <button
-            onClick={() => bulkCreate.mutate({ tableId, count: 100000 })}
+            onClick={handleBulkAdd}
             disabled={bulkCreate.isPending}
-            className="flex items-center gap-[5px] rounded px-2 py-1 text-[13px] text-[#555] transition-colors hover:bg-[#ebebeb]"
+            className="flex items-center gap-1.5 rounded-r-full px-2.5 py-1 text-[#555] transition-colors hover:bg-[#f5f5f5]"
+            title="Add 100k records"
           >
-            {bulkCreate.isPending
-              ? <><Loader2 className="h-3 w-3 animate-spin" /><span>Adding 100k rows…</span></>
-              : <><Plus className="h-3.5 w-3.5" /><span>100k rows</span></>
-            }
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" className="text-[#555]">
+              <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            <span className="text-[12px] font-medium">Add...</span>
           </button>
         </div>
+      </div>
 
-        <div className="flex items-center gap-2">
-          {isFetchingNextPage && (
-            <span className="flex items-center gap-1 text-[12px] text-[#999]">
-              <Loader2 className="h-3 w-3 animate-spin" /> Loading…
-            </span>
-          )}
-          <span className="text-[12px] text-[#777]">
-            {total.toLocaleString()} {total === 1 ? "record" : "records"}
-          </span>
-        </div>
+      {/* ── Bottom footer: record count ── */}
+      <div className="flex h-[32px] shrink-0 items-center border-t border-black/10 bg-[#f2f4f8] px-4">
+        <span className="text-[13px] text-[#1d1f25]">
+          {total.toLocaleString()} record{total !== 1 ? "s" : ""}
+        </span>
       </div>
     </div>
   );

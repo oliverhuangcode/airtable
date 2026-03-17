@@ -129,12 +129,13 @@ model Record {
 
   // All cell values stored as a JSON blob keyed by fieldId
   // e.g. { "fieldId_abc": "Alice", "fieldId_xyz": 42 }
-  data Json @default("{}")
+  data Json @default("{}") @db.JsonB
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([tableId, order])
+  @@unique([tableId, order])
+  @@index([data], type: Gin)
 }
 
 model View {

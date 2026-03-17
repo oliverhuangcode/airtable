@@ -12453,6 +12453,7 @@ export namespace Prisma {
 
   export type RecordWhereUniqueInput = Prisma.AtLeast<{
     id?: string
+    tableId_order?: RecordTableIdOrderCompoundUniqueInput
     AND?: RecordWhereInput | RecordWhereInput[]
     OR?: RecordWhereInput[]
     NOT?: RecordWhereInput | RecordWhereInput[]
@@ -12462,7 +12463,7 @@ export namespace Prisma {
     createdAt?: DateTimeFilter<"Record"> | Date | string
     updatedAt?: DateTimeFilter<"Record"> | Date | string
     table?: XOR<TableScalarRelationFilter, TableWhereInput>
-  }, "id">
+  }, "id" | "tableId_order">
 
   export type RecordOrderByWithAggregationInput = {
     id?: SortOrder
@@ -13708,6 +13709,11 @@ export namespace Prisma {
     gt?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
     gte?: InputJsonValue | JsonFieldRefInput<$PrismaModel>
     not?: InputJsonValue | JsonFieldRefInput<$PrismaModel> | JsonNullValueFilter
+  }
+
+  export type RecordTableIdOrderCompoundUniqueInput = {
+    tableId: string
+    order: number
   }
 
   export type RecordCountOrderByAggregateInput = {

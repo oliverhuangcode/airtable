@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_take_screenshot",
+      "mcp__playwright__browser_wait_for",
+      "mcp__playwright__browser_click",
+      "mcp__playwright__browser_snapshot",
+      "Bash(npx tsx:*)",
+      "Bash(curl:*)",
+      "Bash(kill:*)",
+      "Bash(npx tsc:*)",
+      "mcp__playwright__browser_close",
+      "mcp__playwright__browser_console_messages",
+      "mcp__playwright__browser_run_code",
+      "Bash(pkill:*)",
+      "Bash(npx prisma:*)",
+      "Bash(source:*)",
+      "mcp__playwright__browser_evaluate",
+      "mcp__playwright__browser_tabs",
+      "Bash(npx dotenv-cli:*)",
+      "Bash(npm ls:*)"
+    ]
+  }
+}

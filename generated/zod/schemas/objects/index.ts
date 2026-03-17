@@ -204,6 +204,7 @@ export * from './RecordScalarWhereWithAggregatesInput.schema';
 export * from './RecordSelect.schema';
 export * from './RecordSumAggregateInput.schema';
 export * from './RecordSumOrderByAggregateInput.schema';
+export * from './RecordTableIdOrderCompoundUniqueInput.schema';
 export * from './RecordUncheckedCreateInput.schema';
 export * from './RecordUncheckedCreateNestedManyWithoutTableInput.schema';
 export * from './RecordUncheckedCreateWithoutTableInput.schema';

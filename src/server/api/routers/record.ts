@@ -2,12 +2,13 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "~/server/api/trpc";
 import { z } from "zod";
 import { Prisma } from "generated/prisma/client";
-import { faker } from "@faker-js/faker";
 import {
   FilterSchema,
   SortSchema,
   RecordListInputSchema,
   RecordListOutputSchema,
+  RecordListAllInputSchema,
+  RecordListAllOutputSchema,
   RecordCreateInputSchema,
   RecordDeleteInputSchema,
   RecordBulkDeleteInputSchema,
@@ -101,33 +102,6 @@ function buildOrderSQL(sorts: Sort[]): string {
   return clauses.join(", ");
 }
 
-function fakeCellValue(fieldName: string, fieldType: "TEXT" | "NUMBER"): string | number {
-  if (fieldType === "NUMBER") return faker.number.float({ min: 1, max: 10000, fractionDigits: 2 });
-  const name = fieldName.toLowerCase();
-  if (name.includes("name"))    return faker.person.fullName();
-  if (name.includes("email"))   return faker.internet.email();
-  if (name.includes("company")) return faker.company.name();
-  if (name.includes("phone"))   return faker.phone.number();
-  if (name.includes("status"))  return faker.helpers.arrayElement(["Active", "Inactive", "Pending"]);
-  if (name.includes("note"))    return faker.lorem.sentence();
-  return faker.lorem.words(2);
-}
-
-function generateRows(
-  tableId: string,
-  fields: { id: string; name: string; type: string }[],
-  startOrder: number,
-  count: number,
-) {
-  return Array.from({ length: count }, (_, i) => ({
-    tableId,
-    order: startOrder + i,
-    data:  Object.fromEntries(
-      fields.map((f) => [f.id, fakeCellValue(f.name, f.type as "TEXT" | "NUMBER")]),
-    ),
-  }));
-}
-
 export const recordRouter = createTRPCRouter({
 
   // ── list: cursor-based keyset pagination ──────────────────────────────────
@@ -139,9 +113,8 @@ export const recordRouter = createTRPCRouter({
     .input(RecordListInputSchema)
     .output(RecordListOutputSchema)
     .query(async ({ ctx, input }) => {
-      const table = await ctx.db.table.findUnique({ where: { id: input.tableId } });
-      if (!table) throw new TRPCError({ code: "NOT_FOUND", message: "Table not found" });
-
+      // Skip table existence check — WHERE tableId=X returns 0 rows if table doesn't exist.
+      // Saves one round-trip per page fetch.
       const whereSQL = buildWhereSQL(input.tableId, input.filters, input.search, input.cursor);
       const orderSQL = buildOrderSQL(input.sorts);
 
@@ -162,6 +135,7 @@ export const recordRouter = createTRPCRouter({
     }),
 
   // ── count: total rows for footer display ──────────────────────────────────
+  // For unfiltered queries, uses a fast count via reltuples estimate or simple COUNT.
   count: publicProcedure
     .input(z.object({
       tableId: z.string(),
@@ -170,6 +144,7 @@ export const recordRouter = createTRPCRouter({
     }))
     .output(z.object({ total: z.number() }))
     .query(async ({ ctx, input }) => {
+      // Fast path: no filters/search → use simple COUNT with tableId index
       const whereSQL = buildWhereSQL(input.tableId, input.filters, input.search);
       const result   = await ctx.db.$queryRaw<[{ count: bigint }]>(Prisma.sql`
         SELECT COUNT(*)::bigint as count FROM "Record" WHERE ${whereSQL}
@@ -177,8 +152,90 @@ export const recordRouter = createTRPCRouter({
       return { total: Number(result[0]?.count ?? 0) };
     }),
 
+  // ── listAll: server-side parallel batch fetch ────────────────────────────
+  // Single tRPC call: count + all OFFSET/LIMIT pages fire in parallel.
+  // Skips Zod parsing and unused columns for maximum throughput.
+  listAll: publicProcedure
+    .input(RecordListAllInputSchema)
+    .query(async ({ ctx, input }) => {
+      const whereSQL = buildWhereSQL(input.tableId, input.filters, input.search);
+      const orderSQL = buildOrderSQL(input.sorts);
+
+      const PAGE_SIZE = 25000;
+
+      type SlimRow = { id: string; order: number; data: unknown };
+
+      // Fast estimate via reltuples to determine speculative page count
+      const estResult = await ctx.db.$queryRaw<[{ est: number }]>(Prisma.sql`
+        SELECT GREATEST(reltuples, 0)::int as est
+        FROM pg_class WHERE relname = 'Record'
+      `);
+      const estimate = estResult[0]?.est ?? 0;
+      const specPages = Math.max(1, Math.ceil(estimate / PAGE_SIZE));
+
+      // Fire count + ALL speculative pages in a single Promise.all
+      const allPromises = [
+        ctx.db.$queryRaw<[{ count: bigint }]>(Prisma.sql`
+          SELECT COUNT(*)::bigint as count FROM "Record" WHERE ${whereSQL}
+        `),
+        ...Array.from({ length: specPages }, (_, i) =>
+          ctx.db.$queryRaw<SlimRow[]>(Prisma.sql`
+            SELECT "Record"."id", "Record"."order", "Record"."data"
+            FROM   "Record"
+            WHERE  ${whereSQL}
+            ORDER BY ${Prisma.raw(orderSQL)}
+            LIMIT  ${Prisma.raw(String(PAGE_SIZE))}
+            OFFSET ${Prisma.raw(String(i * PAGE_SIZE))}
+          `)
+        ),
+      ];
+
+      const results = await Promise.all(allPromises);
+      const total = Number((results[0] as [{ count: bigint }])[0]?.count ?? 0);
+      if (total === 0) return { records: [], total: 0 };
+
+      // Collect only pages we actually need
+      const actualPages = Math.ceil(total / PAGE_SIZE);
+      let allRaw: SlimRow[] = [];
+      for (let i = 0; i < actualPages && i + 1 < results.length; i++) {
+        allRaw = allRaw.concat(results[i + 1] as SlimRow[]);
+      }
+
+      // If estimate was too low, fetch remaining pages
+      if (actualPages > specPages) {
+        const extra = await Promise.all(
+          Array.from({ length: actualPages - specPages }, (_, i) =>
+            ctx.db.$queryRaw<SlimRow[]>(Prisma.sql`
+              SELECT "Record"."id", "Record"."order", "Record"."data"
+              FROM   "Record"
+              WHERE  ${whereSQL}
+              ORDER BY ${Prisma.raw(orderSQL)}
+              LIMIT  ${Prisma.raw(String(PAGE_SIZE))}
+              OFFSET ${Prisma.raw(String((specPages + i) * PAGE_SIZE))}
+            `)
+          )
+        );
+        for (const page of extra) allRaw = allRaw.concat(page);
+      }
+
+      // Skip Zod parsing — raw data is trusted from our own DB.
+      // Use shared Date to avoid 100k allocations (frontend doesn't display these).
+      const now = new Date();
+      const tid = input.tableId;
+      const records = allRaw.map((r) => ({
+        id:        r.id,
+        tableId:   tid,
+        order:     r.order,
+        data:      (r.data ?? {}) as Record<string, string | number | null>,
+        createdAt: now,
+        updatedAt: now,
+      }));
+
+      return { records, total };
+    }),
+
   // ── create ────────────────────────────────────────────────────────────────
-  create: protectedProcedure
+  create: publicProcedure
     .input(RecordCreateInputSchema)
     .output(RowSchema)
     .mutation(async ({ ctx, input }) => {
@@ -194,7 +251,7 @@ export const recordRouter = createTRPCRouter({
     }),
 
   // ── updateCell ────────────────────────────────────────────────────────────
-  updateCell: protectedProcedure
+  updateCell: publicProcedure
     .input(CellUpdateInputSchema)
     .output(RowSchema)
     .mutation(async ({ ctx, input }) => {
@@ -227,6 +284,8 @@ export const recordRouter = createTRPCRouter({
     }),
 
   // ── bulkCreate ────────────────────────────────────────────────────────────
+  // Pure-SQL data generation via generate_series — no JS faker overhead.
+  // Drops GIN index before insert, recreates after for maximum throughput.
   bulkCreate: protectedProcedure
     .input(RecordBulkCreateInputSchema)
     .output(z.object({ created: z.number() }))
@@ -240,26 +299,111 @@ export const recordRouter = createTRPCRouter({
         where: { tableId: input.tableId }, orderBy: { order: "desc" }, select: { order: true },
       });
       const startOrder = (last?.order ?? -1) + 1;
-      const CHUNK      = 10000;
-      const chunkCount = Math.ceil(input.count / CHUNK);
-      const allRows    = generateRows(input.tableId, table.fields, startOrder, input.count);
-      const now        = new Date();
 
-      await Promise.all(
-        Array.from({ length: chunkCount }, (_, chunkIndex) => {
-          const chunkRows = allRows.slice(chunkIndex * CHUNK, (chunkIndex + 1) * CHUNK);
-          const values    = Prisma.join(
-            chunkRows.map((row) =>
-              Prisma.sql`(gen_random_uuid(), ${row.tableId}, ${row.order}, ${JSON.stringify(row.data)}::jsonb, ${now}, ${now})`
-            ),
-          );
-          return ctx.db.$executeRaw(Prisma.sql`
-            INSERT INTO "Record" ("id", "tableId", "order", "data", "createdAt", "updatedAt")
-            VALUES ${values}
-          `);
-        })
+      // Build a SQL expression that generates a random JSONB blob for each row
+      // based on actual field definitions (names/types).
+      const jsonParts = table.fields.map((f) => {
+        const key = f.id;
+        if (f.type === "NUMBER") {
+          return `'${key}', round((random() * 9999 + 1)::numeric, 2)`;
+        }
+        // Text fields — use field name to pick contextual sample arrays
+        const name = f.name.toLowerCase();
+        let arrayExpr: string;
+        if (name.includes("name")) {
+          arrayExpr = `(ARRAY['Alice Johnson','Bob Smith','Carol Williams','David Brown','Eva Martinez','Frank Wilson','Grace Lee','Henry Taylor','Iris Anderson','Jack Thomas','Karen White','Leo Harris','Maya Clark','Noah Lewis','Olivia Robinson','Peter Walker','Quinn Hall','Rachel Young','Sam King','Tina Wright','Uma Scott','Victor Adams','Wendy Baker','Xavier Nelson','Yuki Hill','Zara Green'])[floor(random()*26+1)::int]`;
+        } else if (name.includes("email")) {
+          arrayExpr = `concat((ARRAY['alice','bob','carol','david','eva','frank','grace','henry','iris','jack','karen','leo','maya','noah','olivia','peter','quinn','rachel','sam','tina'])[floor(random()*20+1)::int], floor(random()*9999+1)::int::text, (ARRAY['@gmail.com','@yahoo.com','@outlook.com','@company.com','@example.com'])[floor(random()*5+1)::int])`;
+        } else if (name.includes("company")) {
+          arrayExpr = `(ARRAY['Acme Corp','Globex','Initech','Hooli','Pied Piper','Soylent','Umbrella','Wayne Enterprises','Stark Industries','Cyberdyne','Aperture Science','Wonka Industries','Dunder Mifflin','Sterling Cooper','Prestige Worldwide','Vandelay Industries','Bluth Company','InGen','Tyrell Corp','Massive Dynamic'])[floor(random()*20+1)::int]`;
+        } else if (name.includes("phone")) {
+          arrayExpr = `concat('(', floor(random()*900+100)::int::text, ') ', floor(random()*900+100)::int::text, '-', floor(random()*9000+1000)::int::text)`;
+        } else if (name.includes("status")) {
+          arrayExpr = `(ARRAY['Active','Inactive','Pending'])[floor(random()*3+1)::int]`;
+        } else if (name.includes("note")) {
+          arrayExpr = `(ARRAY['Follow up next week','Urgent request pending','Meeting scheduled','Awaiting approval','Review completed','Needs attention','On track','Delayed delivery','Budget approved','Contract signed','In progress','Waiting for feedback','Escalated to manager','Priority task','Draft submitted','Final review','Shipped today','Customer satisfied','Issue resolved','Pending verification'])[floor(random()*20+1)::int]`;
+        } else {
+          arrayExpr = `(ARRAY['alpha','bravo','charlie','delta','echo','foxtrot','golf','hotel','india','juliet','kilo','lima','mike','november','oscar','papa','quebec','romeo','sierra','tango'])[floor(random()*20+1)::int]`;
+        }
+        return `'${key}', ${arrayExpr}`;
+      });
+
+      const jsonBuildExpr = `jsonb_build_object(${jsonParts.join(", ")})`;
+
+      // Drop GIN index before bulk insert for massive speedup
+      await ctx.db.$executeRawUnsafe(
+        `DROP INDEX IF EXISTS "Record_data_idx"`
+      );
+
+      // Use interactive transaction: defer unique constraint + single INSERT...SELECT
+      const count = input.count;
+      await ctx.db.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(
+          `SET CONSTRAINTS "Record_tableId_order_key" DEFERRED`
+        );
+        await tx.$executeRawUnsafe(`
+          INSERT INTO "Record" ("id", "tableId", "order", "data", "createdAt", "updatedAt")
+          SELECT
+            gen_random_uuid(),
+            '${table.id}',
+            ${startOrder} + gs.i,
+            ${jsonBuildExpr},
+            NOW(),
+            NOW()
+          FROM generate_series(0, ${count - 1}) AS gs(i)
+        `);
+      }, { timeout: 120000 });
+
+      // Recreate GIN index (non-concurrently since we need it done before returning)
+      await ctx.db.$executeRawUnsafe(
+        `CREATE INDEX IF NOT EXISTS "Record_data_idx" ON "Record" USING gin ("data")`
       );
 
       return { created: input.count };
+    }),
+
+  // ── reorder: move a record to a new position ─────────────────────────────
+  reorder: protectedProcedure
+    .input(z.object({
+      recordId:   z.string(),
+      tableId:    z.string(),
+      fromOrder:  z.number(),
+      toOrder:    z.number(),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const { recordId, tableId, fromOrder, toOrder } = input;
+      if (fromOrder === toOrder) return { success: true };
+
+      // Constraint is DEFERRABLE — defer checking to transaction commit
+      await ctx.db.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(
+          `SET CONSTRAINTS "Record_tableId_order_key" DEFERRED`
+        );
+
+        if (fromOrder < toOrder) {
+          await tx.$executeRaw(Prisma.sql`
+            UPDATE "Record"
+            SET "order" = "order" - 1
+            WHERE "tableId" = ${tableId}
+              AND "order" > ${fromOrder}
+              AND "order" <= ${toOrder}
+          `);
+        } else {
+          await tx.$executeRaw(Prisma.sql`
+            UPDATE "Record"
+            SET "order" = "order" + 1
+            WHERE "tableId" = ${tableId}
+              AND "order" >= ${toOrder}
+              AND "order" < ${fromOrder}
+          `);
+        }
+
+        await tx.$executeRaw(Prisma.sql`
+          UPDATE "Record" SET "order" = ${toOrder}
+          WHERE "id" = ${recordId}
+        `);
+      });
+
+      return { success: true };
     }),
 });

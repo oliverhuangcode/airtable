@@ -129,6 +129,19 @@ export const tableRouter = createTRPCRouter({
       return { id: input.id };
     }),
 
+  // ─── CLEAR DATA ──────────────────────────────────────────────────────────────
+
+  clearData: protectedProcedure
+    .input(TableDeleteInputSchema)
+    .output(z.object({ deleted: z.number() }))
+    .mutation(async ({ ctx, input }) => {
+      const table = await ctx.db.table.findUnique({ where: { id: input.id } });
+      if (!table) throw new TRPCError({ code: "NOT_FOUND", message: "Table not found" });
+
+      const result = await ctx.db.record.deleteMany({ where: { tableId: input.id } });
+      return { deleted: result.count };
+    }),
+
   // ─── REORDER ───────────────────────────────────────────────────────────────
 
   reorder: protectedProcedure

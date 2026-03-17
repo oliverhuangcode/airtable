@@ -6,25 +6,31 @@ interface Props {
   value:     string | number | null;
   fieldType: string;
   isActive:  boolean;
+  entryMode?: "replace" | "append";
   onCommit:  (value: string | number | null) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
 }
 
-export function CellEditor({ value, fieldType, isActive, onCommit, onKeyDown }: Props) {
+export function CellEditor({ value, fieldType, isActive, entryMode = "replace", onCommit, onKeyDown }: Props) {
   const [editing, setEditing]     = useState(false);
   const [draft,   setDraft]       = useState("");
+  const [hideCaret, setHideCaret] = useState(false);
+  const [hasTyped, setHasTyped]   = useState(false);
   const inputRef                  = useRef<HTMLInputElement>(null);
   const isNumber                  = fieldType === "NUMBER";
 
-  // Enter edit mode on double-click or Enter key
-  const startEditing = () => {
+  const startEditing = (mode: "replace" | "append") => {
     setDraft(value != null ? String(value) : "");
+    setHideCaret(mode === "replace");
+    setHasTyped(false);
     setEditing(true);
   };
 
   const commitEdit = useCallback(() => {
     if (!editing) return;
     setEditing(false);
+    setHideCaret(false);
+    setHasTyped(false);
     if (isNumber) {
       const n = parseFloat(draft);
       onCommit(isNaN(n) ? null : n);
@@ -36,18 +42,30 @@ export function CellEditor({ value, fieldType, isActive, onCommit, onKeyDown }: 
   useEffect(() => {
     if (editing) {
       requestAnimationFrame(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select();
+        const el = inputRef.current;
+        if (!el) return;
+        el.focus();
+        if (hideCaret) {
+          // Replace mode: select all so first keystroke replaces, highlight hidden via CSS
+          el.select();
+        } else if (!isNumber) {
+          // Append mode: place cursor at end
+          const len = el.value.length;
+          el.setSelectionRange(len, len);
+        }
       });
     }
-  }, [editing]);
+  }, [editing, hideCaret, isNumber]);
 
-  // Exit edit mode when cell loses active state
+  // Auto-enter edit mode when cell becomes active
   useEffect(() => {
-    if (!isActive && editing) {
+    if (isActive && !editing) {
+      startEditing(entryMode);
+    } else if (!isActive && editing) {
       commitEdit();
     }
-  }, [isActive, editing, commitEdit]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActive]);
 
   const displayValue = value != null ? String(value) : "";
 
@@ -57,7 +75,12 @@ export function CellEditor({ value, fieldType, isActive, onCommit, onKeyDown }: 
         ref={inputRef}
         type={isNumber ? "number" : "text"}
         value={draft}
-        onChange={(e) => setDraft(e.target.value)}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          if (!hasTyped) setHasTyped(true);
+          // Once user starts typing, show the caret
+          if (hideCaret) setHideCaret(false);
+        }}
         onBlur={commitEdit}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === "Escape") {
@@ -70,10 +93,14 @@ export function CellEditor({ value, fieldType, isActive, onCommit, onKeyDown }: 
             onKeyDown(e);
           }
         }}
-        className={`h-full w-full border-0 bg-white px-[10px] py-0 text-[13px] text-[#1f1f1f] outline-none ${
-          isNumber ? "text-right" : "text-left"
-        }`}
-        style={{ fontFamily: "inherit" }}
+        className={`h-full w-full border-0 bg-transparent px-1.5 py-0 text-[13px] outline-none ${
+          hideCaret && !hasTyped ? "text-[#1170cb]" : "text-[#1d1f25]"
+        } ${hideCaret ? "cell-no-select" : ""} ${isNumber ? "text-right" : "text-left"}`}
+        style={{
+          fontFamily: "inherit",
+          caretColor: hideCaret ? "transparent" : undefined,
+          ...(hideCaret ? { WebkitTextFillColor: hasTyped ? "#1d1f25" : "#1170cb" } : {}),
+        }}
       />
     );
   }
@@ -81,16 +108,16 @@ export function CellEditor({ value, fieldType, isActive, onCommit, onKeyDown }: 
   return (
     <div
       tabIndex={0}
-      onDoubleClick={startEditing}
+      onDoubleClick={() => startEditing("replace")}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === "F2") {
           e.preventDefault();
-          startEditing();
+          startEditing("replace");
           return;
         }
         onKeyDown(e);
       }}
-      className={`flex h-full w-full cursor-default items-center px-[10px] text-[13px] text-[#1f1f1f] outline-none ${
+      className={`flex h-full w-full cursor-default items-center px-1.5 text-[13px] text-[#1d1f25] outline-none ${
         isNumber ? "justify-end" : "justify-start"
       }`}
     >

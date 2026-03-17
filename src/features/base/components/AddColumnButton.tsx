@@ -33,7 +33,7 @@ export function AddColumnButton({ tableId }: Props) {
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="flex w-[52px] flex-shrink-0 items-center justify-center text-[#999] hover:bg-[#f4f4f4] hover:text-[#1f1f1f] transition-colors"
+        className="flex h-8 w-[52px] shrink-0 items-center justify-center border-r border-[#ddd] text-[#999] transition-colors hover:bg-[#f5f5f5] hover:text-[#1f1f1f]"
       >
         <Plus className="h-3.5 w-3.5" />
       </button>

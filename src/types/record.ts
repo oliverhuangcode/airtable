@@ -96,3 +96,19 @@ export const RecordBulkCreateInputSchema = z.object({
   count:   z.number().min(1).max(100000),
 });
 export type RecordBulkCreateInput = z.infer<typeof RecordBulkCreateInputSchema>;
+
+// ─── listAll: server-side parallel batch fetch ────────────────────────────────
+
+export const RecordListAllInputSchema = z.object({
+  tableId: z.string(),
+  filters: z.array(FilterSchema).default([]),
+  sorts:   z.array(SortSchema).default([]),
+  search:  z.string().default(""),
+});
+export type RecordListAllInput = z.infer<typeof RecordListAllInputSchema>;
+
+export const RecordListAllOutputSchema = z.object({
+  records: z.array(RowSchema),
+  total:   z.number(),
+});
+export type RecordListAllOutput = z.infer<typeof RecordListAllOutputSchema>;
