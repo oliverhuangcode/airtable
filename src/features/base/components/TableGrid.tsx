@@ -147,6 +147,7 @@ export function TableGrid({
 
   const cellRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const tempToRealId = useRef<Map<string, string>>(new Map());
+  const scrollToTopAfterLoad = useRef(false);
   const pendingCellUpdates = useRef<
     { tempId: string; fieldId: string; value: string | number | null }[]
   >([]);
@@ -251,6 +252,14 @@ export function TableGrid({
   useEffect(() => {
     if (data && hasNextPage && !isFetchingNextPage) void fetchNextPage();
   }, [data, hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // After bulk insert reloads data, scroll back to the top.
+  useEffect(() => {
+    if (data && scrollToTopAfterLoad.current) {
+      scrollToTopAfterLoad.current = false;
+      if (parentRef.current) parentRef.current.scrollTop = 0;
+    }
+  }, [data]);
 
   useEffect(() => {
     if (!activeCell) return;
@@ -386,6 +395,8 @@ export function TableGrid({
     onSuccess: () => {
       void utils.record.list.reset();
       void utils.record.count.invalidate();
+      scrollToTopAfterLoad.current = true;
+      setActiveCell(null);
     },
   });
 
