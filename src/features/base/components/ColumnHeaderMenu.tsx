@@ -3,10 +3,16 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { api } from "~/trpc/react";
 import {
-  PencilIcon, CopyIcon, ChevronDownIcon, LinkIcon as AirtableLinkIcon,
-  InfoIcon as AirtableInfoIcon, LockIcon as AirtableLockIcon,
-  FunnelSimpleIcon, GroupIcon as AirtableGroupIcon, EyeSlashIcon, TrashIcon,
-  ArrowsDownUpIcon
+  PencilIcon,
+  CopyIcon,
+  ChevronDownIcon,
+  LinkIcon as AirtableLinkIcon,
+  InfoIcon as AirtableInfoIcon,
+  LockIcon as AirtableLockIcon,
+  FunnelSimpleIcon,
+  GroupIcon as AirtableGroupIcon,
+  EyeSlashIcon,
+  TrashIcon,
 } from "~/components/icons/AirtableIcons";
 import type { FieldSummary } from "~/types";
 
@@ -23,48 +29,138 @@ interface Props {
 
 function InsertLeftIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#666]" style={{ shapeRendering: 'geometricPrecision' }}>
-      <path fillRule="nonzero" d="M10.3536 3.64645C10.5488 3.84171 10.5488 4.15829 10.3536 4.35355L6.70711 8L10.3536 11.6464C10.5488 11.8417 10.5488 12.1583 10.3536 12.3536C10.1583 12.5488 9.84171 12.5488 9.64645 12.3536L5.64645 8.35355C5.45118 8.15829 5.45118 7.84171 5.64645 7.64645L9.64645 3.64645C9.84171 3.45118 10.1583 3.45118 10.3536 3.64645Z"/>
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      className="text-[#666]"
+      style={{ shapeRendering: "geometricPrecision" }}
+    >
+      <path
+        fillRule="nonzero"
+        d="M10.3536 3.64645C10.5488 3.84171 10.5488 4.15829 10.3536 4.35355L6.70711 8L10.3536 11.6464C10.5488 11.8417 10.5488 12.1583 10.3536 12.3536C10.1583 12.5488 9.84171 12.5488 9.64645 12.3536L5.64645 8.35355C5.45118 8.15829 5.45118 7.84171 5.64645 7.64645L9.64645 3.64645C9.84171 3.45118 10.1583 3.45118 10.3536 3.64645Z"
+      />
     </svg>
   );
 }
 
 function InsertRightIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#666]" style={{ shapeRendering: 'geometricPrecision' }}>
-      <path fillRule="nonzero" d="M5.64645 3.64645C5.84171 3.45118 6.15829 3.45118 6.35355 3.64645L10.3536 7.64645C10.5488 7.84171 10.5488 8.15829 10.3536 8.35355L6.35355 12.3536C6.15829 12.5488 5.84171 12.5488 5.64645 12.3536C5.45118 12.1583 5.45118 11.8417 5.64645 11.6464L9.29289 8L5.64645 4.35355C5.45118 4.15829 5.45118 3.84171 5.64645 3.64645Z"/>
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      className="text-[#666]"
+      style={{ shapeRendering: "geometricPrecision" }}
+    >
+      <path
+        fillRule="nonzero"
+        d="M5.64645 3.64645C5.84171 3.45118 6.15829 3.45118 6.35355 3.64645L10.3536 7.64645C10.5488 7.84171 10.5488 8.15829 10.3536 8.35355L6.35355 12.3536C6.15829 12.5488 5.84171 12.5488 5.64645 12.3536C5.45118 12.1583 5.45118 11.8417 5.64645 11.6464L9.29289 8L5.64645 4.35355C5.45118 4.15829 5.45118 3.84171 5.64645 3.64645Z"
+      />
     </svg>
   );
 }
 
 function SortAscIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#666]" style={{ shapeRendering: 'geometricPrecision' }}>
-      <path fillRule="nonzero" d="M3 5h10M3 8h7M3 11h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" fill="none" />
-      <path fillRule="nonzero" d="M13 8v5M13 13l-2-2M13 13l2-2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      className="text-[#666]"
+      style={{ shapeRendering: "geometricPrecision" }}
+    >
+      <path
+        fillRule="nonzero"
+        d="M3 5h10M3 8h7M3 11h4"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <path
+        fillRule="nonzero"
+        d="M13 8v5M13 13l-2-2M13 13l2-2"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
     </svg>
   );
 }
 
 function SortDescIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#666]" style={{ shapeRendering: 'geometricPrecision' }}>
-      <path fillRule="nonzero" d="M3 5h4M3 8h7M3 11h10" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" fill="none" />
-      <path fillRule="nonzero" d="M13 3v5M13 3l-2 2M13 3l2 2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      className="text-[#666]"
+      style={{ shapeRendering: "geometricPrecision" }}
+    >
+      <path
+        fillRule="nonzero"
+        d="M3 5h4M3 8h7M3 11h10"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <path
+        fillRule="nonzero"
+        d="M13 3v5M13 3l-2 2M13 3l2 2"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
     </svg>
   );
 }
 
 function DependenciesIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#666]" style={{ shapeRendering: 'geometricPrecision' }}>
-      <path d="M2 4h4M2 8h4M2 12h4M10 4h4M10 8h4M10 12h4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" fill="none" />
-      <path d="M6 4l4 4M6 12l4-4" stroke="currentColor" strokeWidth="1" strokeLinecap="round" fill="none" />
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="currentColor"
+      className="text-[#666]"
+      style={{ shapeRendering: "geometricPrecision" }}
+    >
+      <path
+        d="M2 4h4M2 8h4M2 12h4M10 4h4M10 8h4M10 12h4"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <path
+        d="M6 4l4 4M6 12l4-4"
+        stroke="currentColor"
+        strokeWidth="1"
+        strokeLinecap="round"
+        fill="none"
+      />
     </svg>
   );
 }
 
-export function ColumnHeaderMenu({ field, tableId, onHideField, onFilterByField, onDuplicated, onDeleted }: Props) {
+export function ColumnHeaderMenu({
+  field,
+  tableId,
+  onHideField,
+  onFilterByField,
+  onDuplicated,
+  onDeleted,
+}: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const chevronRef = useRef<HTMLButtonElement>(null);
@@ -102,7 +198,11 @@ export function ColumnHeaderMenu({ field, tableId, onHideField, onFilterByField,
   }, [isOpen]);
 
   const handleDuplicate = useCallback(() => {
-    createField.mutate({ tableId, name: `${field.name} (copy)`, type: field.type });
+    createField.mutate({
+      tableId,
+      name: `${field.name} (copy)`,
+      type: field.type,
+    });
   }, [createField, tableId, field.name, field.type]);
 
   const handleDelete = useCallback(() => {
@@ -124,9 +224,14 @@ export function ColumnHeaderMenu({ field, tableId, onHideField, onFilterByField,
       {/* Chevron trigger — visible on header hover */}
       <button
         ref={chevronRef}
-        onClick={(e) => { e.stopPropagation(); setIsOpen((v) => !v); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          setIsOpen((v) => !v);
+        }}
         className={`flex items-center justify-center rounded p-0.5 transition-opacity hover:bg-[#ddd] hover:text-[#333] ${
-          isOpen ? "opacity-100 text-[#333]" : "text-[#999] opacity-0 group-hover/header:opacity-100"
+          isOpen
+            ? "text-[#333] opacity-100"
+            : "text-[#999] opacity-0 group-hover/header:opacity-100"
         }`}
       >
         <ChevronDownIcon size={12} />
@@ -135,7 +240,7 @@ export function ColumnHeaderMenu({ field, tableId, onHideField, onFilterByField,
       {isOpen && (
         <div
           ref={menuRef}
-          className="absolute left-0 top-full z-40 mt-0 w-[260px] rounded-lg border border-[#ddd] bg-white py-1.5 shadow-xl"
+          className="absolute top-full left-0 z-40 mt-0 w-[260px] rounded-lg border border-[#ddd] bg-white py-1.5 shadow-xl"
         >
           {/* Edit field */}
           <button className="flex w-full items-center gap-3 px-4 py-2 text-[13px] text-[#1d1f25] hover:bg-[#f5f5f5]">

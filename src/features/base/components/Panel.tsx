@@ -4,14 +4,14 @@
 import { X } from "lucide-react";
 
 interface Props {
-  title:    string;
+  title: string;
   children: React.ReactNode;
-  onClose:  () => void;
+  onClose: () => void;
 }
 
 export function Panel({ title, children, onClose }: Props) {
   return (
-    <div className="absolute left-4 top-full z-20 mt-1 min-w-[320px] rounded-lg border border-[#e0e0e0] bg-white p-4 shadow-lg">
+    <div className="absolute top-full left-4 z-20 mt-1 min-w-[320px] rounded-lg border border-[#e0e0e0] bg-white p-4 shadow-lg">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-xs font-semibold text-[#1f1f1f]">{title}</span>
         <button onClick={onClose} className="text-[#999] hover:text-[#666]">

@@ -5,31 +5,65 @@ import { Search, X, Plus, HelpCircle } from "lucide-react";
 import type { Sort, FieldSummary } from "~/types";
 
 interface SortPanelProps {
-  fields:   FieldSummary[];
-  sorts:    Sort[];
+  fields: FieldSummary[];
+  sorts: Sort[];
   onChange: (sorts: Sort[]) => void;
-  onClose:  () => void;
+  onClose: () => void;
 }
 
 function FieldTypeIcon({ type }: { type: string }) {
   if (type === "NUMBER") {
     return (
-      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0 text-[#666]">
-        <text x="2" y="13" fontSize="13" fontWeight="600" fill="currentColor" fontFamily="monospace">#</text>
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        className="shrink-0 text-[#666]"
+      >
+        <text
+          x="2"
+          y="13"
+          fontSize="13"
+          fontWeight="600"
+          fill="currentColor"
+          fontFamily="monospace"
+        >
+          #
+        </text>
       </svg>
     );
   }
   // Text/default - lines icon matching Airtable
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0 text-[#666]">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      className="shrink-0 text-[#666]"
+    >
       <rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="currentColor" />
       <rect x="2" y="7" width="9" height="1.5" rx="0.75" fill="currentColor" />
-      <rect x="2" y="11" width="11" height="1.5" rx="0.75" fill="currentColor" />
+      <rect
+        x="2"
+        y="11"
+        width="11"
+        height="1.5"
+        rx="0.75"
+        fill="currentColor"
+      />
     </svg>
   );
 }
 
-function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+function Toggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: () => void;
+}) {
   return (
     <button
       onClick={onChange}
@@ -46,7 +80,12 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
   );
 }
 
-export function SortPanel({ fields, sorts, onChange, onClose }: SortPanelProps) {
+export function SortPanel({
+  fields,
+  sorts,
+  onChange,
+  onClose: _onClose,
+}: SortPanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [showAddPicker, setShowAddPicker] = useState(false);
   const [autoSort, setAutoSort] = useState(true);
@@ -59,7 +98,8 @@ export function SortPanel({ fields, sorts, onChange, onClose }: SortPanelProps) 
     setShowAddPicker(false);
   };
 
-  const removeSort = (i: number) => onChange(sorts.filter((_, idx) => idx !== i));
+  const removeSort = (i: number) =>
+    onChange(sorts.filter((_, idx) => idx !== i));
 
   const updateSort = (i: number, patch: Partial<Sort>) => {
     onChange(sorts.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
@@ -72,7 +112,7 @@ export function SortPanel({ fields, sorts, onChange, onClose }: SortPanelProps) 
   // If sorts exist, show the applied sorts view
   if (sorts.length > 0) {
     return (
-      <div className="absolute right-0 top-full z-30 mt-1 w-[460px] rounded-lg border border-[#ddd] bg-white shadow-[0_4px_16px_rgba(0,0,0,0.12)]">
+      <div className="absolute top-full right-0 z-30 mt-1 w-[460px] rounded-lg border border-[#ddd] bg-white shadow-[0_4px_16px_rgba(0,0,0,0.12)]">
         {/* Header */}
         <div className="px-4 py-3">
           <div className="flex items-center gap-1.5">
@@ -84,7 +124,7 @@ export function SortPanel({ fields, sorts, onChange, onClose }: SortPanelProps) 
         <div className="mx-4 border-t border-[#eee]" />
 
         {/* Sort rows */}
-        <div className="px-4 py-3 space-y-2">
+        <div className="space-y-2 px-4 py-3">
           {sorts.map((sort, i) => {
             const field = fields.find((f) => f.id === sort.fieldId);
             return (
@@ -98,18 +138,31 @@ export function SortPanel({ fields, sorts, onChange, onClose }: SortPanelProps) 
                   className="flex-1 rounded border border-[#ddd] bg-white px-3 py-1.5 text-[13px] outline-none focus:border-[#2d7ff9]"
                 >
                   {fields.map((f) => (
-                    <option key={f.id} value={f.id}>{f.name}</option>
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
                   ))}
                 </select>
                 <select
                   value={sort.direction}
-                  onChange={(e) => updateSort(i, { direction: e.target.value as "asc" | "desc" })}
+                  onChange={(e) =>
+                    updateSort(i, {
+                      direction: e.target.value as "asc" | "desc",
+                    })
+                  }
                   className="rounded border border-[#ddd] bg-white px-3 py-1.5 text-[13px] outline-none focus:border-[#2d7ff9]"
                 >
-                  <option value="asc">{field?.type === "NUMBER" ? "1 → 9" : "A → Z"}</option>
-                  <option value="desc">{field?.type === "NUMBER" ? "9 → 1" : "Z → A"}</option>
+                  <option value="asc">
+                    {field?.type === "NUMBER" ? "1 → 9" : "A → Z"}
+                  </option>
+                  <option value="desc">
+                    {field?.type === "NUMBER" ? "9 → 1" : "Z → A"}
+                  </option>
                 </select>
-                <button onClick={() => removeSort(i)} className="rounded p-1 text-[#bbb] hover:bg-[#f0f0f0] hover:text-[#666]">
+                <button
+                  onClick={() => removeSort(i)}
+                  className="rounded p-1 text-[#bbb] hover:bg-[#f0f0f0] hover:text-[#666]"
+                >
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -120,7 +173,10 @@ export function SortPanel({ fields, sorts, onChange, onClose }: SortPanelProps) 
         {/* Add another sort */}
         <div className="relative px-4 pb-3">
           <button
-            onClick={() => { setShowAddPicker((v) => !v); setSearchQuery(""); }}
+            onClick={() => {
+              setShowAddPicker((v) => !v);
+              setSearchQuery("");
+            }}
             className="flex items-center gap-1.5 text-[13px] text-[#333] hover:text-[#111]"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -129,7 +185,7 @@ export function SortPanel({ fields, sorts, onChange, onClose }: SortPanelProps) 
 
           {/* Inline field picker */}
           {showAddPicker && (
-            <div className="absolute left-4 top-full z-40 mt-1 w-[240px] rounded-lg border border-[#ddd] bg-white shadow-[0_4px_12px_rgba(0,0,0,0.1)]">
+            <div className="absolute top-full left-4 z-40 mt-1 w-[240px] rounded-lg border border-[#ddd] bg-white shadow-[0_4px_12px_rgba(0,0,0,0.1)]">
               <div className="flex items-center gap-2 border-b border-[#eee] px-3 py-2">
                 <Search className="h-4 w-4 shrink-0 text-[#999]" />
                 <input
@@ -150,7 +206,9 @@ export function SortPanel({ fields, sorts, onChange, onClose }: SortPanelProps) 
                       className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-[#f5f5f5]"
                     >
                       <FieldTypeIcon type={field.type} />
-                      <span className="text-[13px] text-[#1f1f1f]">{field.name}</span>
+                      <span className="text-[13px] text-[#1f1f1f]">
+                        {field.name}
+                      </span>
                     </button>
                   ))}
               </div>
@@ -159,9 +217,11 @@ export function SortPanel({ fields, sorts, onChange, onClose }: SortPanelProps) 
         </div>
 
         {/* Auto sort toggle */}
-        <div className="flex items-center gap-2.5 border-t border-[#eee] bg-[#f8f8f8] px-4 py-3 rounded-b-lg">
+        <div className="flex items-center gap-2.5 rounded-b-lg border-t border-[#eee] bg-[#f8f8f8] px-4 py-3">
           <Toggle checked={autoSort} onChange={() => setAutoSort(!autoSort)} />
-          <span className="text-[13px] text-[#333]">Automatically sort records</span>
+          <span className="text-[13px] text-[#333]">
+            Automatically sort records
+          </span>
         </div>
       </div>
     );
@@ -169,7 +229,7 @@ export function SortPanel({ fields, sorts, onChange, onClose }: SortPanelProps) 
 
   // No sorts — show field picker dropdown matching Airtable
   return (
-    <div className="absolute right-0 top-full z-30 mt-1 w-[280px] rounded-lg border border-[#ddd] bg-white shadow-[0_4px_16px_rgba(0,0,0,0.12)]">
+    <div className="absolute top-full right-0 z-30 mt-1 w-[280px] rounded-lg border border-[#ddd] bg-white shadow-[0_4px_16px_rgba(0,0,0,0.12)]">
       {/* Header */}
       <div className="flex items-center gap-1.5 px-4 py-3">
         <span className="text-[14px] font-medium text-[#1f1f1f]">Sort by</span>
@@ -195,7 +255,9 @@ export function SortPanel({ fields, sorts, onChange, onClose }: SortPanelProps) 
         {filteredFields.map((field) => (
           <button
             key={field.id}
-            onClick={() => { addSort(field); }}
+            onClick={() => {
+              addSort(field);
+            }}
             className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-[#f5f5f5]"
           >
             <FieldTypeIcon type={field.type} />

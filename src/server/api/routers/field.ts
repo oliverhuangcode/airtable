@@ -9,34 +9,38 @@ import {
 } from "~/types";
 
 export const fieldRouter = createTRPCRouter({
-  // ─── WRITE ─────────────────────────────────────────────────────────────────
-
   create: protectedProcedure
     .input(FieldCreateInputSchema)
     .output(FieldSummarySchema)
     .mutation(async ({ ctx, input }) => {
-      const table = await ctx.db.table.findUnique({ where: { id: input.tableId } });
-      if (!table) throw new TRPCError({ code: "NOT_FOUND", message: "Table not found" });
+      const table = await ctx.db.table.findUnique({
+        where: { id: input.tableId },
+      });
+      if (!table)
+        throw new TRPCError({ code: "NOT_FOUND", message: "Table not found" });
 
       const existing = await ctx.db.field.findFirst({
         where: { tableId: input.tableId, name: input.name },
       });
       if (existing) {
-        throw new TRPCError({ code: "CONFLICT", message: `Column "${input.name}" already exists` });
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `Column "${input.name}" already exists`,
+        });
       }
 
       const last = await ctx.db.field.findFirst({
-        where:   { tableId: input.tableId },
+        where: { tableId: input.tableId },
         orderBy: { order: "desc" },
-        select:  { order: true },
+        select: { order: true },
       });
 
       return ctx.db.field.create({
         data: {
-          name:    input.name,
-          type:    input.type,
+          name: input.name,
+          type: input.type,
           tableId: input.tableId,
-          order:   (last?.order ?? -1) + 1,
+          order: (last?.order ?? -1) + 1,
         },
         select: { id: true, name: true, type: true, order: true },
       });
@@ -47,18 +51,26 @@ export const fieldRouter = createTRPCRouter({
     .output(FieldSummarySchema)
     .mutation(async ({ ctx, input }) => {
       const field = await ctx.db.field.findUnique({ where: { id: input.id } });
-      if (!field) throw new TRPCError({ code: "NOT_FOUND", message: "Field not found" });
+      if (!field)
+        throw new TRPCError({ code: "NOT_FOUND", message: "Field not found" });
 
       const clash = await ctx.db.field.findFirst({
-        where: { tableId: field.tableId, name: input.name, NOT: { id: input.id } },
+        where: {
+          tableId: field.tableId,
+          name: input.name,
+          NOT: { id: input.id },
+        },
       });
       if (clash) {
-        throw new TRPCError({ code: "CONFLICT", message: `Column "${input.name}" already exists` });
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `Column "${input.name}" already exists`,
+        });
       }
 
       return ctx.db.field.update({
-        where:  { id: input.id },
-        data:   { name: input.name },
+        where: { id: input.id },
+        data: { name: input.name },
         select: { id: true, name: true, type: true, order: true },
       });
     }),
@@ -68,7 +80,8 @@ export const fieldRouter = createTRPCRouter({
     .output(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const field = await ctx.db.field.findUnique({ where: { id: input.id } });
-      if (!field) throw new TRPCError({ code: "NOT_FOUND", message: "Field not found" });
+      if (!field)
+        throw new TRPCError({ code: "NOT_FOUND", message: "Field not found" });
 
       await ctx.db.field.delete({ where: { id: input.id } });
       return { id: input.id };

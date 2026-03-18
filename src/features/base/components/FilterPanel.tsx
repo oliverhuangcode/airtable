@@ -5,23 +5,29 @@ import { Plus, HelpCircle, Trash2, MoreVertical } from "lucide-react";
 import type { FieldSummary, Filter } from "~/types";
 
 interface Props {
-  fields:   FieldSummary[];
-  filters:  Filter[];
+  fields: FieldSummary[];
+  filters: Filter[];
   onChange: (filters: Filter[]) => void;
-  onClose:  () => void;
+  onClose: () => void;
 }
 
-const TEXT_OPS   = ["contains", "not_contains", "equals", "is_empty", "is_not_empty"] as const;
+const TEXT_OPS = [
+  "contains",
+  "not_contains",
+  "equals",
+  "is_empty",
+  "is_not_empty",
+] as const;
 const NUMBER_OPS = ["gt", "lt", "equals"] as const;
 
 const OP_LABELS: Record<string, string> = {
-  contains:     "contains",
+  contains: "contains",
   not_contains: "does not contain",
-  equals:       "is",
-  is_empty:     "is empty",
+  equals: "is",
+  is_empty: "is empty",
   is_not_empty: "is not empty",
-  gt:           "greater than",
-  lt:           "less than",
+  gt: "greater than",
+  lt: "less than",
 };
 
 export function FilterPanel({ fields, filters, onChange, onClose }: Props) {
@@ -33,7 +39,7 @@ export function FilterPanel({ fields, filters, onChange, onClose }: Props) {
     const newFilter: Filter =
       field.type === "NUMBER"
         ? { type: "number", fieldId: field.id, op: "gt", value: 0 }
-        : { type: "text",   fieldId: field.id, op: "contains", value: "" };
+        : { type: "text", fieldId: field.id, op: "contains", value: "" };
     setDraft([...draft, newFilter]);
   };
 
@@ -43,9 +49,7 @@ export function FilterPanel({ fields, filters, onChange, onClose }: Props) {
 
   const updateFilter = (i: number, patch: Partial<Filter>) => {
     setDraft(
-      draft.map((f, idx) =>
-        idx === i ? ({ ...f, ...patch } as Filter) : f,
-      ),
+      draft.map((f, idx) => (idx === i ? ({ ...f, ...patch } as Filter) : f)),
     );
   };
 
@@ -55,7 +59,7 @@ export function FilterPanel({ fields, filters, onChange, onClose }: Props) {
     const newFilter: Filter =
       field.type === "NUMBER"
         ? { type: "number", fieldId, op: "gt", value: 0 }
-        : { type: "text",   fieldId, op: "contains", value: "" };
+        : { type: "text", fieldId, op: "contains", value: "" };
     setDraft(draft.map((f, idx) => (idx === i ? newFilter : f)));
   };
 
@@ -65,9 +69,11 @@ export function FilterPanel({ fields, filters, onChange, onClose }: Props) {
   };
 
   return (
-    <div className={`absolute right-0 top-full z-30 mt-1 rounded-lg border border-[#ddd] bg-white shadow-[0_4px_16px_rgba(0,0,0,0.12)] ${
-      draft.length > 0 ? "w-[580px]" : "w-[380px]"
-    }`}>
+    <div
+      className={`absolute top-full right-0 z-30 mt-1 rounded-lg border border-[#ddd] bg-white shadow-[0_4px_16px_rgba(0,0,0,0.12)] ${
+        draft.length > 0 ? "w-[580px]" : "w-[380px]"
+      }`}
+    >
       {/* Header */}
       <div className="px-4 pt-3 pb-2">
         <h3 className="text-[14px] font-semibold text-[#1f1f1f]">Filter</h3>
@@ -75,10 +81,25 @@ export function FilterPanel({ fields, filters, onChange, onClose }: Props) {
 
       {/* AI description bar */}
       <div className="mx-4 mb-3 flex items-center gap-2 rounded-md border border-[#ddd] px-3 py-2">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0 text-[#bbb]">
-          <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" strokeDasharray="2 2" />
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          fill="none"
+          className="shrink-0 text-[#bbb]"
+        >
+          <circle
+            cx="8"
+            cy="8"
+            r="6"
+            stroke="currentColor"
+            strokeWidth="1.2"
+            strokeDasharray="2 2"
+          />
         </svg>
-        <span className="text-[13px] text-[#999]">Describe what you want to see</span>
+        <span className="text-[13px] text-[#999]">
+          Describe what you want to see
+        </span>
       </div>
 
       {/* Body */}
@@ -90,17 +111,24 @@ export function FilterPanel({ fields, filters, onChange, onClose }: Props) {
           </div>
         ) : (
           <>
-            <div className="mb-2 text-[13px] text-[#888]">In this view, show records</div>
+            <div className="mb-2 text-[13px] text-[#888]">
+              In this view, show records
+            </div>
             <div className="space-y-2">
               {draft.map((filter, i) => {
                 const ops = filter.type === "number" ? NUMBER_OPS : TEXT_OPS;
-                const needsValue = filter.type === "text"
-                  ? !["is_empty", "is_not_empty"].includes(filter.op)
-                  : true;
+                const needsValue =
+                  filter.type === "text"
+                    ? !["is_empty", "is_not_empty"].includes(filter.op)
+                    : true;
 
                 return (
                   <div key={i} className="flex items-center gap-2">
-                    {i === 0 && <span className="w-[52px] shrink-0 text-[13px] text-[#666]">Where</span>}
+                    {i === 0 && (
+                      <span className="w-[52px] shrink-0 text-[13px] text-[#666]">
+                        Where
+                      </span>
+                    )}
                     {i > 0 && (
                       <select className="w-[52px] shrink-0 rounded border border-[#ddd] px-1 py-1.5 text-[13px] text-[#666] outline-none">
                         <option>and</option>
@@ -113,37 +141,51 @@ export function FilterPanel({ fields, filters, onChange, onClose }: Props) {
                       className="min-w-[100px] flex-1 rounded border border-[#ddd] px-2 py-1.5 text-[13px] outline-none focus:border-[#2d7ff9]"
                     >
                       {fields.map((f) => (
-                        <option key={f.id} value={f.id}>{f.name}</option>
+                        <option key={f.id} value={f.id}>
+                          {f.name}
+                        </option>
                       ))}
                     </select>
                     <select
                       value={filter.op}
-                      onChange={(e) => updateFilter(i, { op: e.target.value as never })}
+                      onChange={(e) =>
+                        updateFilter(i, { op: e.target.value as never })
+                      }
                       className="rounded border border-[#ddd] px-2 py-1.5 text-[13px] outline-none focus:border-[#2d7ff9]"
                     >
                       {ops.map((op) => (
-                        <option key={op} value={op}>{OP_LABELS[op]}</option>
+                        <option key={op} value={op}>
+                          {OP_LABELS[op]}
+                        </option>
                       ))}
                     </select>
-                    {needsValue && (
-                      filter.type === "number" ? (
+                    {needsValue &&
+                      (filter.type === "number" ? (
                         <input
                           type="number"
                           value={filter.value}
-                          onChange={(e) => updateFilter(i, { value: parseFloat(e.target.value) || 0 })}
+                          onChange={(e) =>
+                            updateFilter(i, {
+                              value: parseFloat(e.target.value) || 0,
+                            })
+                          }
                           className="w-24 rounded border border-[#ddd] px-2 py-1.5 text-[13px] outline-none focus:border-[#2d7ff9]"
                         />
                       ) : (
                         <input
                           type="text"
                           value={filter.value ?? ""}
-                          onChange={(e) => updateFilter(i, { value: e.target.value })}
+                          onChange={(e) =>
+                            updateFilter(i, { value: e.target.value })
+                          }
                           placeholder="Enter a value"
-                          className="w-28 rounded border border-[#ddd] px-2 py-1.5 text-[13px] outline-none focus:border-[#2d7ff9] placeholder:text-[#999]"
+                          className="w-28 rounded border border-[#ddd] px-2 py-1.5 text-[13px] outline-none placeholder:text-[#999] focus:border-[#2d7ff9]"
                         />
-                      )
-                    )}
-                    <button onClick={() => removeFilter(i)} className="rounded p-1 text-[#bbb] hover:bg-[#f0f0f0] hover:text-[#666]">
+                      ))}
+                    <button
+                      onClick={() => removeFilter(i)}
+                      className="rounded p-1 text-[#bbb] hover:bg-[#f0f0f0] hover:text-[#666]"
+                    >
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                     <button className="rounded p-1 text-[#bbb] hover:bg-[#f0f0f0] hover:text-[#666]">

@@ -5,30 +5,64 @@ import { HelpCircle } from "lucide-react";
 import type { FieldSummary } from "~/types";
 
 interface HidePanelProps {
-  fields:         FieldSummary[];
+  fields: FieldSummary[];
   hiddenFieldIds: string[];
-  onChange:       (ids: string[]) => void;
-  onClose:        () => void;
+  onChange: (ids: string[]) => void;
+  onClose: () => void;
 }
 
 function FieldTypeIcon({ type }: { type: string }) {
   if (type === "NUMBER") {
     return (
-      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="shrink-0 text-[#666]">
-        <text x="2" y="13" fontSize="13" fontWeight="600" fill="currentColor" fontFamily="monospace">#</text>
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 16 16"
+        fill="none"
+        className="shrink-0 text-[#666]"
+      >
+        <text
+          x="2"
+          y="13"
+          fontSize="13"
+          fontWeight="600"
+          fill="currentColor"
+          fontFamily="monospace"
+        >
+          #
+        </text>
       </svg>
     );
   }
   return (
-    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" className="shrink-0 text-[#666]">
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 16 16"
+      fill="none"
+      className="shrink-0 text-[#666]"
+    >
       <rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="currentColor" />
       <rect x="2" y="7" width="9" height="1.5" rx="0.75" fill="currentColor" />
-      <rect x="2" y="11" width="11" height="1.5" rx="0.75" fill="currentColor" />
+      <rect
+        x="2"
+        y="11"
+        width="11"
+        height="1.5"
+        rx="0.75"
+        fill="currentColor"
+      />
     </svg>
   );
 }
 
-function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
+function Toggle({
+  checked,
+  onChange,
+}: {
+  checked: boolean;
+  onChange: () => void;
+}) {
   return (
     <button
       onClick={onChange}
@@ -48,7 +82,13 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void 
 // 3-dot vertical grip icon (thinner than lucide MoreVertical)
 function GripDots() {
   return (
-    <svg width="8" height="14" viewBox="0 0 8 14" fill="none" className="shrink-0 text-[#ccc]">
+    <svg
+      width="8"
+      height="14"
+      viewBox="0 0 8 14"
+      fill="none"
+      className="shrink-0 text-[#ccc]"
+    >
       <circle cx="4" cy="3" r="1" fill="currentColor" />
       <circle cx="4" cy="7" r="1" fill="currentColor" />
       <circle cx="4" cy="11" r="1" fill="currentColor" />
@@ -56,7 +96,12 @@ function GripDots() {
   );
 }
 
-export function HideFieldsPanel({ fields, hiddenFieldIds, onChange, onClose: _onClose }: HidePanelProps) {
+export function HideFieldsPanel({
+  fields,
+  hiddenFieldIds,
+  onChange,
+  onClose: _onClose,
+}: HidePanelProps) {
   const [searchQuery, setSearchQuery] = useState("");
 
   const toggle = (id: string) => {
@@ -75,7 +120,7 @@ export function HideFieldsPanel({ fields, hiddenFieldIds, onChange, onClose: _on
   );
 
   return (
-    <div className="absolute right-0 top-full z-30 mt-1 w-[280px] rounded-lg border border-[#ddd] bg-white shadow-[0_4px_16px_rgba(0,0,0,0.12)]">
+    <div className="absolute top-full right-0 z-30 mt-1 w-[280px] rounded-lg border border-[#ddd] bg-white shadow-[0_4px_16px_rgba(0,0,0,0.12)]">
       {/* Search header */}
       <div className="flex items-center gap-2 px-3 py-2.5">
         <input
@@ -99,7 +144,9 @@ export function HideFieldsPanel({ fields, hiddenFieldIds, onChange, onClose: _on
             >
               <Toggle checked={isVisible} onChange={() => toggle(field.id)} />
               <FieldTypeIcon type={field.type} />
-              <span className="flex-1 truncate text-[13px] text-[#333]">{field.name}</span>
+              <span className="flex-1 truncate text-[13px] text-[#333]">
+                {field.name}
+              </span>
               <GripDots />
             </div>
           );

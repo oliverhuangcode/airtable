@@ -16,12 +16,12 @@ import {
 } from "lucide-react";
 
 interface Props {
-  search?:      string;
-  onSearch?:    (v: string) => void;
+  search?: string;
+  onSearch?: (v: string) => void;
   onFilterOpen: () => void;
-  onSortOpen:   () => void;
-  filterCount:  number;
-  sortCount:    number;
+  onSortOpen: () => void;
+  filterCount: number;
+  sortCount: number;
 }
 
 function ToolbarButton({
@@ -30,10 +30,10 @@ function ToolbarButton({
   onClick,
   badge,
 }: {
-  icon:    React.ReactNode;
-  label:   string;
+  icon: React.ReactNode;
+  label: string;
   onClick?: () => void;
-  badge?:  number;
+  badge?: number;
 }) {
   return (
     <button
@@ -51,7 +51,14 @@ function ToolbarButton({
   );
 }
 
-export function ViewToolbar({ search: _search, onSearch: _onSearch, onFilterOpen, onSortOpen, filterCount, sortCount }: Props) {
+export function ViewToolbar({
+  search: _search,
+  onSearch: _onSearch,
+  onFilterOpen,
+  onSortOpen,
+  filterCount,
+  sortCount,
+}: Props) {
   return (
     <div className="flex h-11 shrink-0 items-center border-b border-[#e0e0e0] bg-white px-2">
       {/* Left: hamburger + view selector */}
@@ -72,23 +79,38 @@ export function ViewToolbar({ search: _search, onSearch: _onSearch, onFilterOpen
 
       {/* Right toolbar buttons */}
       <div className="flex flex-1 items-center gap-0.5">
-        <ToolbarButton icon={<EyeOff className="h-3.5 w-3.5" />} label="Hide fields" />
+        <ToolbarButton
+          icon={<EyeOff className="h-3.5 w-3.5" />}
+          label="Hide fields"
+        />
         <ToolbarButton
           icon={<Filter className="h-3.5 w-3.5" />}
           label="Filter"
           onClick={onFilterOpen}
           badge={filterCount}
         />
-        <ToolbarButton icon={<Layers className="h-3.5 w-3.5" />} label="Group" />
+        <ToolbarButton
+          icon={<Layers className="h-3.5 w-3.5" />}
+          label="Group"
+        />
         <ToolbarButton
           icon={<ArrowUpDown className="h-3.5 w-3.5" />}
           label="Sort"
           onClick={onSortOpen}
           badge={sortCount}
         />
-        <ToolbarButton icon={<Palette className="h-3.5 w-3.5" />} label="Color" />
-        <ToolbarButton icon={<AlignJustify className="h-3.5 w-3.5" />} label="" />
-        <ToolbarButton icon={<Share2 className="h-3.5 w-3.5" />} label="Share and sync" />
+        <ToolbarButton
+          icon={<Palette className="h-3.5 w-3.5" />}
+          label="Color"
+        />
+        <ToolbarButton
+          icon={<AlignJustify className="h-3.5 w-3.5" />}
+          label=""
+        />
+        <ToolbarButton
+          icon={<Share2 className="h-3.5 w-3.5" />}
+          label="Share and sync"
+        />
       </div>
 
       {/* Search */}

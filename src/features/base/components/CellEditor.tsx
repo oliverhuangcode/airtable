@@ -3,21 +3,28 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
 interface Props {
-  value:     string | number | null;
+  value: string | number | null;
   fieldType: string;
-  isActive:  boolean;
+  isActive: boolean;
   entryMode?: "replace" | "append";
-  onCommit:  (value: string | number | null) => void;
+  onCommit: (value: string | number | null) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
 }
 
-export function CellEditor({ value, fieldType, isActive, entryMode = "replace", onCommit, onKeyDown }: Props) {
-  const [editing, setEditing]     = useState(false);
-  const [draft,   setDraft]       = useState("");
+export function CellEditor({
+  value,
+  fieldType,
+  isActive,
+  entryMode = "replace",
+  onCommit,
+  onKeyDown,
+}: Props) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
   const [hideCaret, setHideCaret] = useState(false);
-  const [hasTyped, setHasTyped]   = useState(false);
-  const inputRef                  = useRef<HTMLInputElement>(null);
-  const isNumber                  = fieldType === "NUMBER";
+  const [hasTyped, setHasTyped] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const isNumber = fieldType === "NUMBER";
 
   const startEditing = (mode: "replace" | "append") => {
     setDraft(value != null ? String(value) : "");
@@ -64,7 +71,7 @@ export function CellEditor({ value, fieldType, isActive, entryMode = "replace", 
     } else if (!isActive && editing) {
       commitEdit();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isActive]);
 
   const displayValue = value != null ? String(value) : "";
@@ -93,13 +100,15 @@ export function CellEditor({ value, fieldType, isActive, entryMode = "replace", 
             onKeyDown(e);
           }
         }}
-        className={`h-full w-full border-0 bg-transparent px-1.5 py-0 text-[13px] outline-none ${
+        className={`h-full w-full border-0 bg-transparent px-2.5 py-0 text-[13px] outline-none ${
           hideCaret && !hasTyped ? "text-[#1170cb]" : "text-[#1d1f25]"
         } ${hideCaret ? "cell-no-select" : ""} ${isNumber ? "text-right" : "text-left"}`}
         style={{
           fontFamily: "inherit",
           caretColor: hideCaret ? "transparent" : undefined,
-          ...(hideCaret ? { WebkitTextFillColor: hasTyped ? "#1d1f25" : "#1170cb" } : {}),
+          ...(hideCaret
+            ? { WebkitTextFillColor: hasTyped ? "#1d1f25" : "#1170cb" }
+            : {}),
         }}
       />
     );
@@ -117,7 +126,7 @@ export function CellEditor({ value, fieldType, isActive, entryMode = "replace", 
         }
         onKeyDown(e);
       }}
-      className={`flex h-full w-full cursor-default items-center px-1.5 text-[13px] text-[#1d1f25] outline-none ${
+      className={`flex h-full w-full cursor-default items-center px-2.5 text-[13px] text-[#1d1f25] outline-none ${
         isNumber ? "justify-end" : "justify-start"
       }`}
     >

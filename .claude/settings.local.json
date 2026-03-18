@@ -22,7 +22,10 @@
       "Bash(npx dotenv-cli:*)",
       "Bash(npm ls:*)",
       "Bash(grep:*)",
-      "Bash(npx next:*)"
+      "Bash(npx next:*)",
+      "Bash(npm list:*)",
+      "Bash(npm install:*)",
+      "Bash(find /Users/oliver/lyra/day1/airtable/src -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" \\\\\\) -exec wc -l {} +)"
     ]
   }
 }
