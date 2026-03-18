@@ -30,11 +30,11 @@ interface Props {
   onViewIdChange: (id: string) => void;
 }
 
-function GridIcon({ active }: { active: boolean }) {
+function GridIcon() {
   return (
     <GridFeatureIcon
       size={16}
-      fill={active ? "rgb(22, 110, 225)" : "#666"}
+      fill="rgb(22, 110, 225)"
       className="shrink-0"
     />
   );
@@ -493,13 +493,15 @@ export function ViewSidebar({
   }, [filters, sorts, hiddenFieldIds]);
 
   const handleSelectView = async (viewId: string) => {
+    if (viewId === activeViewIdRef.current) return;
+
+    // Flush pending debounce and save current view in background (don't block the switch)
     if (debounceTimer.current) {
       clearTimeout(debounceTimer.current);
       debounceTimer.current = null;
     }
-
     if (activeViewIdRef.current) {
-      await saveCurrentView(activeViewIdRef.current);
+      void saveCurrentView(activeViewIdRef.current);
     }
 
     const full = await utils.view.getById.fetch(
@@ -621,7 +623,7 @@ export function ViewSidebar({
                       className={`h-4 w-4 ${favouriteViewIds.has(view.id) ? "fill-[#f5a623]" : ""}`}
                     />
                   </span>
-                  <GridIcon active={isActive} />
+                  <GridIcon />
                   <span className="flex-1 truncate text-[13px]">
                     {view.name}
                   </span>

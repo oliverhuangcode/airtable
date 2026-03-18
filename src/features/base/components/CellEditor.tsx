@@ -15,7 +15,7 @@ export function CellEditor({
   value,
   fieldType,
   isActive,
-  entryMode = "replace",
+  entryMode: _entryMode = "replace",
   onCommit,
   onKeyDown,
 }: Props) {
@@ -26,10 +26,17 @@ export function CellEditor({
   const inputRef = useRef<HTMLInputElement>(null);
   const isNumber = fieldType === "NUMBER";
 
-  const startEditing = (mode: "replace" | "append") => {
-    setDraft(value != null ? String(value) : "");
-    setHideCaret(mode === "replace");
-    setHasTyped(false);
+  const startEditing = (mode: "replace" | "append", initialChar?: string) => {
+    if (initialChar !== undefined) {
+      // User typed a character while cell was selected — start fresh with that char
+      setDraft(initialChar);
+      setHideCaret(false);
+      setHasTyped(true);
+    } else {
+      setDraft(value != null ? String(value) : "");
+      setHideCaret(mode === "replace");
+      setHasTyped(false);
+    }
     setEditing(true);
   };
 
@@ -64,11 +71,9 @@ export function CellEditor({
     }
   }, [editing, hideCaret, isNumber]);
 
-  // Auto-enter edit mode when cell becomes active
+  // Commit when navigated away; do NOT auto-enter edit on activation (Airtable model)
   useEffect(() => {
-    if (isActive && !editing) {
-      startEditing(entryMode);
-    } else if (!isActive && editing) {
+    if (!isActive && editing) {
       commitEdit();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -121,13 +126,26 @@ export function CellEditor({
   return (
     <div
       tabIndex={0}
-      onDoubleClick={() => startEditing("replace")}
+      onDoubleClick={() => startEditing("append")}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === "F2") {
           e.preventDefault();
-          startEditing("replace");
+          startEditing("append");
           return;
         }
+        // Backspace/Delete — clear cell and enter edit mode
+        if (e.key === "Backspace" || e.key === "Delete") {
+          e.preventDefault();
+          startEditing("replace", "");
+          return;
+        }
+        // Printable character — start editing with that char (replaces content)
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          if (isNumber && !/[\d.\-]/.test(e.key)) return;
+          startEditing("replace", e.key);
+          return;
+        }
+        // Arrow keys, Tab, Escape — navigate
         onKeyDown(e);
       }}
       className={`flex h-full w-full cursor-default items-center px-2.5 text-[13px] text-[#1d1f25] outline-none ${

@@ -190,6 +190,18 @@ export function TableGrid({
     return 76;
   }, [total]);
 
+  const filteredFieldIds = useMemo(
+    () => new Set(filters.map((f) => f.fieldId)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(filters)],
+  );
+
+  const sortedFieldIds = useMemo(
+    () => new Set(sorts.map((s) => s.fieldId)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(sorts)],
+  );
+
   const [columnSizing, setColumnSizing] = useState<ColumnSizingState>({});
 
   const columns = useMemo<ColumnDef<DataRow>[]>(
@@ -674,7 +686,13 @@ export function TableGrid({
             <div
               key={header.id}
               className={`group/header relative flex shrink-0 cursor-pointer items-center gap-1.5 border-r border-b border-[#d1d1d1] px-3 hover:bg-[#e8e8e8] ${
-                selectedColumn === field.id ? "bg-[#f1f6ff]" : "bg-white"
+                filteredFieldIds.has(field.id)
+                  ? "bg-[#f8fefa]"
+                  : sortedFieldIds.has(field.id)
+                    ? "bg-[#fef9f8]"
+                    : selectedColumn === field.id
+                      ? "bg-[#f1f6ff]"
+                      : "bg-white"
               }`}
               style={{ width: header.getSize(), height: ROW_HEIGHT }}
               onClick={() => {
@@ -897,6 +915,8 @@ export function TableGrid({
                   const isMatch = matchIdx !== undefined;
                   const isActiveMatch = matchIdx === searchIndex;
                   const isColSelected = selectedColumn === fieldId;
+                  const isFilteredCol = filteredFieldIds.has(fieldId);
+                  const isSortedCol = sortedFieldIds.has(fieldId);
 
                   return (
                     <div
@@ -910,9 +930,13 @@ export function TableGrid({
                           ? "#fdd66a"
                           : isMatch
                             ? "#fff3d4"
-                            : isColSelected
-                              ? "#f1f6ff"
-                              : undefined,
+                            : isFilteredCol
+                              ? "#eafceb"
+                              : isSortedCol
+                                ? "#fff3e9"
+                                : isColSelected
+                                  ? "#f1f6ff"
+                                  : undefined,
                       }}
                       onClick={(e) => {
                         e.stopPropagation();

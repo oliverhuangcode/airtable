@@ -749,9 +749,22 @@ export function Toolbar({
           <div className="relative">
             <ToolbarButton
               icon={<FilterIcon className="h-3.5 w-3.5" />}
-              label="Filter"
+              label={
+                filters.length > 0
+                  ? `Filtered by ${[
+                      ...new Set(
+                        filters
+                          .map(
+                            (f) =>
+                              fields.find((fi) => fi.id === f.fieldId)?.name,
+                          )
+                          .filter(Boolean),
+                      ),
+                    ].join(", ")}`
+                  : "Filter"
+              }
               active={openPanel === "filter"}
-              badge={filters.length > 0 ? filters.length : undefined}
+              hasItems={filters.length > 0}
               onClick={() => toggle("filter")}
             />
             {openPanel === "filter" && (
@@ -781,9 +794,14 @@ export function Toolbar({
           <div className="relative">
             <ToolbarButton
               icon={<ArrowsDownUpIcon size={14} />}
-              label="Sort"
+              label={
+                sorts.length > 0
+                  ? `Sorted by ${sorts.length} field${sorts.length === 1 ? "" : "s"}`
+                  : "Sort"
+              }
               active={openPanel === "sort"}
-              badge={sorts.length > 0 ? sorts.length : undefined}
+              hasItems={sorts.length > 0}
+              hasItemsBg="bg-[#ffdfcd]"
               onClick={() => toggle("sort")}
             />
             {openPanel === "sort" && (
@@ -919,21 +937,27 @@ function ToolbarButton({
   label,
   active,
   badge,
+  hasItems,
+  hasItemsBg = "bg-[#d0f5d1]",
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   active: boolean;
   badge?: number;
+  hasItems?: boolean;
+  hasItemsBg?: string;
   onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
       className={`relative flex items-center gap-1.5 rounded px-2 py-1.5 text-[13px] transition-colors ${
-        active
-          ? "bg-[#d0e5ff] text-[#2d7ff9]"
-          : "text-[#1d1f25]/80 hover:bg-black/5"
+        hasItems
+          ? `${hasItemsBg} text-[#1d1f25]`
+          : active
+            ? "bg-[#d0e5ff] text-[#2d7ff9]"
+            : "text-[#1d1f25]/80 hover:bg-black/5"
       }`}
     >
       <span className="shrink-0">{icon}</span>
