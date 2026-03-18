@@ -695,6 +695,9 @@ const STANDARD_FIELDS: (FieldOption & { hasArrow?: boolean })[] = [
 export function AddColumnButton({ tableId }: Props) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [step, setStep] = useState<"picker" | "configure">("picker");
+  const [selectedType, setSelectedType] = useState<FieldOption | null>(null);
+  const [fieldName, setFieldName] = useState("");
   const panelRef = useRef<HTMLDivElement>(null);
   const utils = api.useUtils();
 
@@ -703,25 +706,43 @@ export function AddColumnButton({ tableId }: Props) {
       void utils.base.getById.invalidate();
       setSearchQuery("");
       setIsOpen(false);
+      setStep("picker");
+      setSelectedType(null);
+      setFieldName("");
     },
   });
+
+  const closeAll = () => {
+    setIsOpen(false);
+    setSearchQuery("");
+    setStep("picker");
+    setSelectedType(null);
+    setFieldName("");
+  };
 
   // Close on outside click
   useEffect(() => {
     if (!isOpen) return;
     const handler = (e: MouseEvent) => {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-        setSearchQuery("");
+        closeAll();
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [isOpen]);
+  }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSelect = (option: FieldOption) => {
     if (option.disabled || !option.type) return;
-    createField.mutate({ tableId, name: option.label, type: option.type });
+    setSelectedType(option);
+    setFieldName(option.label);
+    setStep("configure");
+  };
+
+  const handleCreate = () => {
+    if (!selectedType?.type) return;
+    const name = fieldName.trim() || selectedType.label;
+    createField.mutate({ tableId, name, type: selectedType.type });
   };
 
   const query = searchQuery.toLowerCase().trim();
@@ -754,91 +775,121 @@ export function AddColumnButton({ tableId }: Props) {
         className="absolute top-full right-0 z-30 mt-0.5 w-[420px] rounded-lg border border-[#ddd] bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Search bar */}
-        <div className="flex items-center gap-2 border-b border-[#eee] px-3 py-2.5">
-          <MagnifyingGlassIcon
-            size={16}
-            className="flex-shrink-0 text-[#999]"
-          />
-          <input
-            autoFocus
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                setIsOpen(false);
-                setSearchQuery("");
-              }
-            }}
-            placeholder="Find a field type"
-            className="flex-1 bg-transparent text-[13px] text-[#1d1f25] outline-none placeholder:text-[#999]"
-          />
-          <button className="flex-shrink-0 text-[#999] hover:text-[#666]">
-            <QuestionIcon size={16} />
-          </button>
-        </div>
-
-        <div className="max-h-[480px] overflow-y-auto">
-          {/* Field agents section */}
-          {filteredAgents.length > 0 && (
-            <div className="px-3 pt-3 pb-1">
-              <p className="mb-2 text-[11px] font-medium tracking-wide text-[#999] uppercase">
-                Field agents
-              </p>
-              <div className="grid grid-cols-2 gap-0.5">
-                {filteredAgents.map((agent) => (
-                  <button
-                    key={agent.label}
-                    onClick={() => handleSelect(agent)}
-                    className="flex items-center gap-2 rounded-md px-2 py-[7px] text-left text-[13px] text-[#1d1f25] transition-colors hover:bg-[#f5f5f5] disabled:opacity-50"
-                    disabled={agent.disabled}
-                  >
-                    <span className="flex-shrink-0">{agent.icon}</span>
-                    <span className="truncate">{agent.label}</span>
-                  </button>
-                ))}
-              </div>
+        {step === "configure" && selectedType ? (
+          // ── Configure panel ───────────────────────────────────────────────
+          <div className="flex flex-col gap-2 p-3">
+            <input
+              autoFocus
+              value={fieldName}
+              onChange={(e) => setFieldName(e.target.value)}
+              placeholder="Field name (optional)"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleCreate();
+                if (e.key === "Escape") closeAll();
+              }}
+              className="w-full rounded-md border border-[#1170cb] px-3 py-2 text-[13px] text-[#1d1f25] outline-none placeholder:text-[#999]"
+            />
+            <div className="flex items-center gap-2 rounded-md border border-[#ddd] px-3 py-2 text-[13px] text-[#1d1f25]">
+              <span className="flex-shrink-0">{selectedType.icon}</span>
+              <span className="flex-1">{selectedType.label}</span>
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" className="flex-shrink-0 text-[#999]">
+                <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </div>
-          )}
-
-          {/* Standard fields section */}
-          {filteredStandard.length > 0 && (
-            <div className="px-3 pt-3 pb-2">
-              <p className="mb-1 text-[11px] font-medium tracking-wide text-[#999] uppercase">
-                Standard fields
-              </p>
-              <div className="flex flex-col">
-                {filteredStandard.map((field) => (
-                  <button
-                    key={field.label}
-                    onClick={() => handleSelect(field)}
-                    className={`flex items-center gap-2.5 rounded-md px-2 py-[7px] text-left text-[13px] transition-colors ${
-                      field.disabled
-                        ? "text-[#1d1f25] opacity-50 hover:bg-[#f5f5f5]"
-                        : "text-[#1d1f25] hover:bg-[#f0f3ff]"
-                    }`}
-                    disabled={field.disabled}
-                  >
-                    <span className="flex-shrink-0">{field.icon}</span>
-                    <span className="flex-1 truncate">{field.label}</span>
-                    {field.hasArrow && (
-                      <ChevronRightIcon
-                        size={14}
-                        className="flex-shrink-0 text-[#999]"
-                      />
-                    )}
-                  </button>
-                ))}
-              </div>
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                onClick={closeAll}
+                className="rounded px-3 py-1.5 text-[13px] text-[#555] transition-colors hover:bg-[#f5f5f5]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreate}
+                disabled={createField.isPending}
+                className="rounded bg-[#1d7ff6] px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-[#1a72dd] disabled:opacity-60"
+              >
+                {createField.isPending ? "Creating..." : "Create field"}
+              </button>
             </div>
-          )}
-
-          {filteredAgents.length === 0 && filteredStandard.length === 0 && (
-            <div className="px-3 py-6 text-center text-[13px] text-[#999]">
-              No matching field types
+          </div>
+        ) : (
+          // ── Type picker panel ─────────────────────────────────────────────
+          <>
+            <div className="flex items-center gap-2 border-b border-[#eee] px-3 py-2.5">
+              <MagnifyingGlassIcon size={16} className="flex-shrink-0 text-[#999]" />
+              <input
+                autoFocus
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") closeAll();
+                }}
+                placeholder="Find a field type"
+                className="flex-1 bg-transparent text-[13px] text-[#1d1f25] outline-none placeholder:text-[#999]"
+              />
+              <button className="flex-shrink-0 text-[#999] hover:text-[#666]">
+                <QuestionIcon size={16} />
+              </button>
             </div>
-          )}
-        </div>
+
+            <div className="max-h-[480px] overflow-y-auto">
+              {filteredAgents.length > 0 && (
+                <div className="px-3 pt-3 pb-1">
+                  <p className="mb-2 text-[11px] font-medium tracking-wide text-[#999] uppercase">
+                    Field agents
+                  </p>
+                  <div className="grid grid-cols-2 gap-0.5">
+                    {filteredAgents.map((agent) => (
+                      <button
+                        key={agent.label}
+                        onClick={() => handleSelect(agent)}
+                        className="flex items-center gap-2 rounded-md px-2 py-[7px] text-left text-[13px] text-[#1d1f25] transition-colors hover:bg-[#f5f5f5] disabled:opacity-50"
+                        disabled={agent.disabled}
+                      >
+                        <span className="flex-shrink-0">{agent.icon}</span>
+                        <span className="truncate">{agent.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {filteredStandard.length > 0 && (
+                <div className="px-3 pt-3 pb-2">
+                  <p className="mb-1 text-[11px] font-medium tracking-wide text-[#999] uppercase">
+                    Standard fields
+                  </p>
+                  <div className="flex flex-col">
+                    {filteredStandard.map((field) => (
+                      <button
+                        key={field.label}
+                        onClick={() => handleSelect(field)}
+                        className={`flex items-center gap-2.5 rounded-md px-2 py-[7px] text-left text-[13px] transition-colors ${
+                          field.disabled
+                            ? "text-[#1d1f25] opacity-50 hover:bg-[#f5f5f5]"
+                            : "text-[#1d1f25] hover:bg-[#f0f3ff]"
+                        }`}
+                        disabled={field.disabled}
+                      >
+                        <span className="flex-shrink-0">{field.icon}</span>
+                        <span className="flex-1 truncate">{field.label}</span>
+                        {field.hasArrow && (
+                          <ChevronRightIcon size={14} className="flex-shrink-0 text-[#999]" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {filteredAgents.length === 0 && filteredStandard.length === 0 && (
+                <div className="px-3 py-6 text-center text-[13px] text-[#999]">
+                  No matching field types
+                </div>
+              )}
+            </div>
+          </>
+        )}
       </div>
     </>
   );

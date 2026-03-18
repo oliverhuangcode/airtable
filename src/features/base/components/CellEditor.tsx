@@ -98,6 +98,10 @@ export function CellEditor({
             e.preventDefault();
             commitEdit();
             onKeyDown(e);
+          } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+            e.preventDefault();
+            commitEdit();
+            onKeyDown(e);
           }
         }}
         className={`h-full w-full border-0 bg-transparent px-2.5 py-0 text-[13px] outline-none ${
